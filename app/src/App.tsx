@@ -65,7 +65,9 @@ function buildAmortization(strategy) {
     yearsToPayoff: rows.length / 12,
     totalInterest,
     minPayment,
-    headroom: (targetPayment || 0) - minPayment,
+    headroom: targetPayment != null && targetPayment > minPayment
+      ? targetPayment - minPayment
+      : 0,
   };
 }
 
@@ -556,6 +558,7 @@ function ComparisonPage({ page, onUpdate }) {
   const [showLegend, setShowLegend] = useState(false);
   const [focusedId, setFocusedId] = useState(null);
   const [scheduleStratId, setScheduleStratId] = useState(null);
+  const [activeTab, setActiveTab] = useState("table");
   const [strategies, setStrategies] = useState(page.strategies);
 
   useEffect(() => {
@@ -770,7 +773,7 @@ function ComparisonPage({ page, onUpdate }) {
                     </div>
                     <div>
                       <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Headroom</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: a.headroom > 0 ? "#22c55e" : "#f97316", fontFamily: "monospace" }}>{fmt$(a.headroom)}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: a.headroom > 0 ? "#22c55e" : a.headroom === 0 ? "#555" : "#f97316", fontFamily: "monospace" }}>{fmt$(a.headroom)}</div>
                     </div>
                   </div>
                   {/* Schedule button */}
@@ -800,8 +803,33 @@ function ComparisonPage({ page, onUpdate }) {
             })}
           </div>
 
-          {/* Charts grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          {/* Tab bar */}
+          <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.08)", marginBottom: 20 }}>
+            {[{ id: "table", label: "Strategy Comparison" }, { id: "charts", label: "Charts" }].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  padding: "8px 20px",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: `2px solid ${activeTab === tab.id ? "#7c6af7" : "transparent"}`,
+                  marginBottom: "-1px",
+                  color: activeTab === tab.id ? "#e8e8e8" : "#555",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: activeTab === tab.id ? 600 : 400,
+                  letterSpacing: "0.01em",
+                  transition: "color 0.15s",
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── CHARTS TAB ─────────────────────────────────────────────── */}
+          {activeTab === "charts" && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
             <ChartCard title="Remaining Balance Over Time">
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={balanceData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -875,12 +903,11 @@ function ComparisonPage({ page, onUpdate }) {
                 </ResponsiveContainer>
               </ChartCard>
             ))}
-          </div>
+          </div>}
 
-          {/* Comparison table */}
-          {amortizations.length > 1 && (
-            <div style={{ marginTop: 24, marginBottom: 32 }}>
-              <div style={{ fontSize: 11, color: "#555", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>Strategy Comparison</div>
+          {/* ── TABLE TAB ──────────────────────────────────────────────── */}
+          {activeTab === "table" && (
+            <div style={{ marginBottom: 32 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -916,7 +943,7 @@ function ComparisonPage({ page, onUpdate }) {
                         </td>
                         <td style={{ padding: "10px 12px", color: "#bbb", fontFamily: "monospace" }}>{fmt$(strat.targetPayment)}</td>
                         <td style={{ padding: "10px 12px", color: "#bbb", fontFamily: "monospace" }}>{fmt$(a.minPayment)}</td>
-                        <td style={{ padding: "10px 12px", fontFamily: "monospace", color: a.headroom > 0 ? "#22c55e" : "#f97316" }}>{fmt$(a.headroom)}</td>
+                        <td style={{ padding: "10px 12px", fontFamily: "monospace", color: a.headroom > 0 ? "#22c55e" : a.headroom === 0 ? "#555" : "#f97316" }}>{fmt$(a.headroom)}</td>
                         <td style={{ padding: "10px 12px", color: a.color, fontFamily: "monospace", fontWeight: 700 }}>{fmtYr(a.yearsToPayoff)}</td>
                         <td style={{ padding: "10px 12px", color: "#e8e8e8", fontFamily: "monospace" }}>{fmt$(a.totalInterest)}</td>
                         <td style={{ padding: "10px 12px", fontFamily: "monospace", color: savings > 0 ? "#22c55e" : "#666" }}>
