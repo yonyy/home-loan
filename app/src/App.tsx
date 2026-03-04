@@ -284,8 +284,104 @@ function ChartCard({ title, children }) {
 
 // ─── COMPARISON PAGE ─────────────────────────────────────────────────────────
 
+const LEGEND_ITEMS = [
+  {
+    term: "Min Payment",
+    color: "#3b82f6",
+    icon: "▸",
+    def: "The lowest monthly amount needed to fully pay off the loan on schedule. Calculated as P+I (principal + interest) using the standard amortization formula, plus escrow. Paying less than this means the loan won't amortize — your balance may never reach $0.",
+  },
+  {
+    term: "Headroom",
+    color: "#22c55e",
+    icon: "▸",
+    def: "How much above (or below) the minimum payment your target payment sits. Green = you're overpaying, which chips away at principal faster. Orange = you're underpaying the minimum — the loan is negatively amortizing and won't pay off on schedule.",
+    note: "Formula: Target Payment − Min Payment",
+  },
+  {
+    term: "Total Interest",
+    color: "#f97316",
+    icon: "▸",
+    def: "The total dollars paid in interest over the entire life of the loan, from today to payoff. This is the primary cost comparison metric — lower is better. It does not include escrow (taxes + insurance).",
+  },
+  {
+    term: "Payoff",
+    color: "#a855f7",
+    icon: "▸",
+    def: "The number of years until the remaining loan balance reaches $0. Assumes you make exactly your target payment every month. If target payment is blank, it assumes the exact minimum P+I payment.",
+  },
+  {
+    term: "Savings vs Worst",
+    color: "#22c55e",
+    icon: "▸",
+    def: "How much total interest this strategy saves compared to the strategy with the highest total interest cost. Helps you quickly see the dollar value of refinancing or paying extra. The worst-performing strategy always shows '—'.",
+  },
+  {
+    term: "Dashed Lines on Balance Chart",
+    color: "#888",
+    icon: "┊",
+    def: "Vertical dashed lines at Month 12 and Month 24 mark the ARM rate step-up points. Month 12: the rate adjusts from Year-1 rate to Year-2 rate. Month 24: it steps again to the Year-3+ rate. Only relevant for ARM strategies — fixed/refi strategies are unaffected by these boundaries.",
+  },
+];
+
+function Legend({ onClose }) {
+  return (
+    <div style={{
+      background: "rgba(10,10,15,0.97)",
+      borderBottom: "1px solid rgba(255,255,255,0.08)",
+      padding: "16px 28px 20px",
+      animation: "legendSlideIn 0.18s ease-out",
+    }}>
+      <style>{`
+        @keyframes legendSlideIn {
+          from { opacity: 0; transform: translateY(-6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          Dashboard Glossary
+        </div>
+        <button onClick={onClose} style={{
+          background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 16, padding: "0 4px", lineHeight: 1,
+        }}>×</button>
+      </div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+        gap: "10px 24px",
+      }}>
+        {LEGEND_ITEMS.map(item => (
+          <div key={item.term} style={{
+            display: "flex",
+            gap: 10,
+            padding: "10px 12px",
+            background: "rgba(255,255,255,0.025)",
+            borderRadius: 8,
+            borderLeft: `2px solid ${item.color}66`,
+          }}>
+            <div style={{ flexShrink: 0, marginTop: 1 }}>
+              <span style={{ fontSize: 10, color: item.color, fontFamily: "monospace", fontWeight: 700 }}>{item.icon}</span>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#ccc", marginBottom: 4 }}>{item.term}</div>
+              <div style={{ fontSize: 11, color: "#666", lineHeight: 1.55 }}>{item.def}</div>
+              {item.note && (
+                <div style={{ marginTop: 5, fontSize: 10, color: "#444", fontFamily: "monospace", background: "rgba(255,255,255,0.04)", padding: "3px 7px", borderRadius: 4, display: "inline-block" }}>
+                  {item.note}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ComparisonPage({ page, onUpdate }) {
   const [editMode, setEditMode] = useState(page.strategies.length === 0);
+  const [showLegend, setShowLegend] = useState(false);
   const [strategies, setStrategies] = useState(page.strategies);
 
   useEffect(() => {
@@ -338,34 +434,54 @@ function ComparisonPage({ page, onUpdate }) {
     <div style={{ minHeight: "calc(100vh - 48px)", display: "flex", flexDirection: "column" }}>
 
       {/* Page header bar */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 12,
-        padding: "12px 28px",
-        borderBottom: "1px solid rgba(255,255,255,0.07)",
-        background: "rgba(0,0,0,0.3)",
-        flexShrink: 0,
-      }}>
-        <input
-          value={page.title}
-          onChange={e => onUpdate({ ...page, title: e.target.value })}
-          style={inputStyle({ fontSize: 15, fontWeight: 700, background: "transparent", border: "none", width: "auto", minWidth: 200 })}
-        />
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={() => setEditMode(!editMode)}
-          style={{
-            background: editMode ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.06)",
-            border: `1px solid ${editMode ? "#3b82f6" : "rgba(255,255,255,0.12)"}`,
-            color: editMode ? "#3b82f6" : "#aaa",
-            borderRadius: 7,
-            padding: "6px 14px",
-            fontSize: 12,
-            cursor: "pointer",
-            fontWeight: 600,
-          }}
-        >
-          {editMode ? "✓ Done editing" : "⚙ Edit strategies"}
-        </button>
+      <div style={{ flexShrink: 0 }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "12px 28px",
+          borderBottom: showLegend ? "none" : "1px solid rgba(255,255,255,0.07)",
+          background: "rgba(0,0,0,0.3)",
+        }}>
+          <input
+            value={page.title}
+            onChange={e => onUpdate({ ...page, title: e.target.value })}
+            style={inputStyle({ fontSize: 15, fontWeight: 700, background: "transparent", border: "none", width: "auto", minWidth: 200 })}
+          />
+          <div style={{ flex: 1 }} />
+          {/* Glossary toggle */}
+          <button
+            onClick={() => setShowLegend(v => !v)}
+            title="Toggle glossary"
+            style={{
+              background: showLegend ? "rgba(168,85,247,0.15)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${showLegend ? "#a855f7" : "rgba(255,255,255,0.1)"}`,
+              color: showLegend ? "#a855f7" : "#666",
+              borderRadius: 7,
+              padding: "6px 12px",
+              fontSize: 12,
+              cursor: "pointer",
+              fontWeight: 600,
+              letterSpacing: "0.01em",
+            }}
+          >
+            ⓘ Glossary
+          </button>
+          <button
+            onClick={() => setEditMode(!editMode)}
+            style={{
+              background: editMode ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.06)",
+              border: `1px solid ${editMode ? "#3b82f6" : "rgba(255,255,255,0.12)"}`,
+              color: editMode ? "#3b82f6" : "#aaa",
+              borderRadius: 7,
+              padding: "6px 14px",
+              fontSize: 12,
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            {editMode ? "✓ Done editing" : "⚙ Edit strategies"}
+          </button>
+        </div>
+        {showLegend && <Legend onClose={() => setShowLegend(false)} />}
       </div>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
