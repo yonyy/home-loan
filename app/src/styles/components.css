@@ -1,0 +1,270 @@
+/* ── Summary Cards ─────────────────────────────────────────────────────────── */
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 var(--spacing-sm);
+  border-right: 1px solid var(--color-border);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.summary-card__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summary-card__value {
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.summary-card__sub {
+  font-size: 11px;
+  color: var(--color-text-dim);
+}
+
+/* ── Input Panel ───────────────────────────────────────────────────────────── */
+.input-panel {
+  padding: var(--spacing-sm);
+}
+
+.input-section {
+  margin-bottom: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.input-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-surface);
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+
+.input-section__header:hover {
+  color: var(--color-text-primary);
+}
+
+.input-section__chevron {
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.input-section__chevron--open {
+  transform: rotate(180deg);
+}
+
+.input-section__body {
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  background: var(--color-bg);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field--row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field__label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.field__value {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--color-accent-blue);
+}
+
+.field input[type="range"] {
+  width: 100%;
+  accent-color: var(--color-accent-blue);
+  cursor: pointer;
+}
+
+.field input[type="number"],
+.field input[type="text"] {
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  outline: none;
+}
+
+.field input[type="number"]:focus,
+.field input[type="text"]:focus {
+  border-color: var(--color-accent-blue);
+}
+
+.field select {
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.toggle input[type="checkbox"] {
+  accent-color: var(--color-accent-blue);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.reset-btn {
+  margin: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  width: calc(100% - 2 * var(--spacing-md));
+  text-align: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.reset-btn:hover {
+  border-color: var(--color-accent-blue);
+  color: var(--color-accent-blue);
+}
+
+/* ── Scenario Tabs ─────────────────────────────────────────────────────────── */
+.scenario-tabs {
+  display: flex;
+  gap: 1px;
+  padding: var(--spacing-md) var(--spacing-md) 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-wrap: wrap;
+}
+
+.scenario-tab {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  transition: color 0.1s;
+}
+
+.scenario-tab:hover {
+  color: var(--color-text-primary);
+}
+
+.scenario-tab--active {
+  color: var(--color-accent-blue);
+  border-bottom-color: var(--color-accent-blue);
+}
+
+/* ── Amortization Table ────────────────────────────────────────────────────── */
+.amort-table-wrapper {
+  overflow-x: auto;
+  padding: var(--spacing-md);
+}
+
+.amort-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.amort-table th {
+  padding: 6px 10px;
+  text-align: right;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.amort-table th:first-child {
+  text-align: left;
+}
+
+.amort-table td {
+  padding: 5px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.amort-table td:first-child {
+  text-align: left;
+}
+
+.amort-table tr:hover td {
+  background: var(--color-surface);
+}
+
+.amort-table .year1 { color: var(--arm-year1); }
+.amort-table .year2 { color: var(--arm-year2); }
+.amort-table .year3 { color: var(--arm-year3); }
+
+.amort-table .negative { color: var(--color-accent-red); }
+.amort-table .positive { color: var(--color-accent-green); }
+.amort-table .quarterly-row td { background: rgba(79, 134, 247, 0.06); }
+
+.read-only-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-dim);
+  padding: 4px 0;
+}
