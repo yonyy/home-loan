@@ -15,7 +15,6 @@ function buildAmortization(strategy) {
   const { balance, escrow, targetPayment, loanType, armRates, fixedRate, fixedTerm, closingCosts } = strategy;
   const startBalance = loanType === "refi" ? balance + (closingCosts || 0) : balance;
 
-  // When targetPayment is null/blank, use the standard minimum P+I for the loan term
   const minPI = loanType === "arm"
     ? calcFixedPI(startBalance, armRates?.[0] || 0.04375, 30)
     : calcFixedPI(startBalance, fixedRate, fixedTerm);
@@ -137,6 +136,34 @@ function savePages(pages) {
 const fmt$ = (v) => v == null ? "—" : "$" + Math.round(v).toLocaleString();
 const fmtK = (v) => v == null ? "—" : "$" + (v / 1000).toFixed(0) + "k";
 const fmtYr = (v) => v == null ? "—" : v.toFixed(1) + " yrs";
+
+// ─── CSV EXPORT ──────────────────────────────────────────────────────────────
+
+function exportCSV(amort, strategy) {
+  const headers = ["Month", "Year", "Payment", "Principal", "Interest", "Escrow", "Balance", "Cumul. Interest"];
+  const lines = [headers.join(",")];
+  amort.rows.forEach(r => {
+    lines.push([
+      r.month,
+      Math.ceil(r.month / 12),
+      r.payment.toFixed(2),
+      r.principal.toFixed(2),
+      r.interest.toFixed(2),
+      strategy.escrow.toFixed(2),
+      r.balance.toFixed(2),
+      r.totalInterest.toFixed(2),
+    ].join(","));
+  });
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${strategy.name.replace(/[^a-z0-9]+/gi, "_")}_schedule.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 // ─── COMPONENTS ─────────────────────────────────────────────────────────────
 
@@ -268,13 +295,15 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-function ChartCard({ title, children }) {
+function ChartCard({ title, children, dimmed = false }) {
   return (
     <div style={{
       background: "rgba(255,255,255,0.025)",
       border: "1px solid rgba(255,255,255,0.07)",
       borderRadius: 12,
       padding: "16px 18px",
+      opacity: dimmed ? 0.22 : 1,
+      transition: "opacity 0.2s ease",
     }}>
       <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 14 }}>{title}</div>
       {children}
@@ -282,7 +311,148 @@ function ChartCard({ title, children }) {
   );
 }
 
-// ─── COMPARISON PAGE ─────────────────────────────────────────────────────────
+// ─── SCHEDULE MODAL ──────────────────────────────────────────────────────────
+
+function ScheduleModal({ amort, strategy, onClose }) {
+  const tableRows = [];
+  let prevYear = 0;
+  amort.rows.forEach((r, i) => {
+    const yr = Math.ceil(r.month / 12);
+    if (yr !== prevYear) {
+      tableRows.push({ type: "year", year: yr, key: `yr-${yr}` });
+      prevYear = yr;
+    }
+    tableRows.push({ type: "row", r, i, key: `m-${r.month}` });
+  });
+
+  return (
+    <div
+      onClick={e => e.target === e.currentTarget && onClose()}
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "rgba(0,0,0,0.82)",
+        display: "flex", alignItems: "flex-start", justifyContent: "center",
+        padding: "40px 24px",
+        overflowY: "auto",
+      }}
+    >
+      <div style={{
+        background: "#111215",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 16,
+        width: "100%",
+        maxWidth: 860,
+        marginBottom: 40,
+        display: "flex",
+        flexDirection: "column",
+        maxHeight: "calc(90vh - 80px)",
+        boxShadow: "0 28px 80px rgba(0,0,0,0.7)",
+      }}>
+        {/* Modal header */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "14px 20px",
+          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          background: "rgba(0,0,0,0.4)",
+          borderRadius: "16px 16px 0 0",
+          flexShrink: 0,
+          flexWrap: "wrap",
+          rowGap: 8,
+        }}>
+          <div style={{ width: 9, height: 9, borderRadius: "50%", background: strategy.color, flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#e8e8e8" }}>{strategy.name}</span>
+          <span style={{ fontSize: 11, color: "#444" }}>— Amortization Schedule</span>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 10, color: "#777", background: "rgba(255,255,255,0.05)", padding: "3px 8px", borderRadius: 4 }}>
+            Payoff: <strong style={{ color: strategy.color }}>{fmtYr(amort.yearsToPayoff)}</strong>
+          </span>
+          <span style={{ fontSize: 10, color: "#777", background: "rgba(255,255,255,0.05)", padding: "3px 8px", borderRadius: 4 }}>
+            Total Interest: <strong style={{ color: "#e8e8e8" }}>{fmt$(amort.totalInterest)}</strong>
+          </span>
+          <button
+            onClick={() => exportCSV(amort, strategy)}
+            style={{
+              background: "rgba(34,197,94,0.1)",
+              border: "1px solid rgba(34,197,94,0.3)",
+              color: "#22c55e",
+              borderRadius: 6,
+              padding: "5px 11px",
+              fontSize: 11,
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >↓ Export CSV</button>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 20, padding: "0 4px", lineHeight: 1, marginLeft: 4 }}
+          >×</button>
+        </div>
+
+        {/* Table */}
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                {["Mo", "Yr", "Payment", "Principal", "Interest", "Escrow", "Balance", "Cumul. Interest"].map(h => (
+                  <th key={h} style={{
+                    padding: "8px 14px",
+                    textAlign: "right",
+                    color: "#444",
+                    fontWeight: 600,
+                    fontSize: 9,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    whiteSpace: "nowrap",
+                    background: "#111215",
+                    position: "sticky",
+                    top: 0,
+                    zIndex: 1,
+                  }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map(item => {
+                if (item.type === "year") {
+                  return (
+                    <tr key={item.key}>
+                      <td colSpan={8} style={{
+                        padding: "6px 14px 3px",
+                        fontSize: 9,
+                        color: "#333",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.1em",
+                        borderTop: item.year > 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                        background: "rgba(255,255,255,0.01)",
+                      }}>
+                        Year {item.year}
+                      </td>
+                    </tr>
+                  );
+                }
+                const { r, i } = item;
+                return (
+                  <tr key={item.key} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)" }}>
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#555", fontFamily: "monospace" }}>{r.month}</td>
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#3a3a3a", fontFamily: "monospace" }}>{Math.ceil(r.month / 12)}</td>
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#bbb", fontFamily: "monospace" }}>{fmt$(r.payment)}</td>
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#22c55e", fontFamily: "monospace" }}>{fmt$(r.principal)}</td>
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#f97316", fontFamily: "monospace" }}>{fmt$(r.interest)}</td>
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#666", fontFamily: "monospace" }}>{fmt$(strategy.escrow)}</td>
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#e8e8e8", fontFamily: "monospace", fontWeight: 600 }}>{fmt$(r.balance)}</td>
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#555", fontFamily: "monospace" }}>{fmt$(r.totalInterest)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LEGEND ──────────────────────────────────────────────────────────────────
 
 const LEGEND_ITEMS = [
   {
@@ -379,9 +549,13 @@ function Legend({ onClose }) {
   );
 }
 
+// ─── COMPARISON PAGE ─────────────────────────────────────────────────────────
+
 function ComparisonPage({ page, onUpdate }) {
   const [editMode, setEditMode] = useState(page.strategies.length === 0);
   const [showLegend, setShowLegend] = useState(false);
+  const [focusedId, setFocusedId] = useState(null);
+  const [scheduleStratId, setScheduleStratId] = useState(null);
   const [strategies, setStrategies] = useState(page.strategies);
 
   useEffect(() => {
@@ -430,6 +604,14 @@ function ComparisonPage({ page, onUpdate }) {
     }]);
   };
 
+  // helpers for focus-aware chart rendering
+  const lineOpacity = (id) => focusedId ? (id === focusedId ? 1 : 0.1) : 1;
+  const lineWidth  = (id) => focusedId ? (id === focusedId ? 2.5 : 1) : 2;
+
+  // modal data
+  const scheduleAmort = scheduleStratId ? amortizations.find(a => a.id === scheduleStratId) : null;
+  const scheduleStrat = scheduleStratId ? strategies.find(s => s.id === scheduleStratId) : null;
+
   return (
     <div style={{ minHeight: "calc(100vh - 48px)", display: "flex", flexDirection: "column" }}>
 
@@ -447,6 +629,23 @@ function ComparisonPage({ page, onUpdate }) {
             style={inputStyle({ fontSize: 15, fontWeight: 700, background: "transparent", border: "none", width: "auto", minWidth: 200 })}
           />
           <div style={{ flex: 1 }} />
+          {focusedId && (
+            <button
+              onClick={() => setFocusedId(null)}
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "#888",
+                borderRadius: 7,
+                padding: "6px 12px",
+                fontSize: 12,
+                cursor: "pointer",
+                fontWeight: 500,
+              }}
+            >
+              ✕ Clear focus
+            </button>
+          )}
           {/* Glossary toggle */}
           <button
             onClick={() => setShowLegend(v => !v)}
@@ -533,37 +732,72 @@ function ComparisonPage({ page, onUpdate }) {
             gap: 12,
             marginBottom: 28,
           }}>
-            {amortizations.map(a => (
-              <div key={a.id} style={{
-                background: "rgba(255,255,255,0.03)",
-                border: `1px solid ${a.color}33`,
-                borderRadius: 12,
-                padding: "16px 18px",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: a.color }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#ccc" }}>{a.name}</span>
+            {amortizations.map(a => {
+              const isFocused = focusedId === a.id;
+              const isDimmed = focusedId && !isFocused;
+              return (
+                <div
+                  key={a.id}
+                  onClick={() => setFocusedId(isFocused ? null : a.id)}
+                  style={{
+                    background: isFocused ? `rgba(${hexToRgb(a.color)}, 0.07)` : "rgba(255,255,255,0.03)",
+                    border: isFocused ? `1.5px solid ${a.color}99` : `1px solid ${a.color}33`,
+                    borderRadius: 12,
+                    padding: "16px 18px",
+                    cursor: "pointer",
+                    opacity: isDimmed ? 0.38 : 1,
+                    transition: "opacity 0.2s ease, border-color 0.15s ease, background 0.15s ease",
+                    boxShadow: isFocused ? `0 0 0 1px ${a.color}33, 0 4px 20px ${a.color}18` : "none",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: a.color }} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: isFocused ? "#e8e8e8" : "#ccc", flex: 1 }}>{a.name}</span>
+                    {isFocused && <span style={{ fontSize: 9, color: a.color, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>focused</span>}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Payoff</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: a.color, fontFamily: "monospace" }}>{fmtYr(a.yearsToPayoff)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Total Interest</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: "#e8e8e8", fontFamily: "monospace" }}>{fmtK(a.totalInterest)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Min Payment</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#bbb", fontFamily: "monospace" }}>{fmt$(a.minPayment)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Headroom</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: a.headroom > 0 ? "#22c55e" : "#f97316", fontFamily: "monospace" }}>{fmt$(a.headroom)}</div>
+                    </div>
+                  </div>
+                  {/* Schedule button */}
+                  <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "flex-end" }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); setScheduleStratId(a.id); }}
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        color: "#666",
+                        borderRadius: 5,
+                        padding: "4px 10px",
+                        fontSize: 10,
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        letterSpacing: "0.04em",
+                        transition: "color 0.15s, border-color 0.15s",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "#aaa"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "#666"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}
+                    >
+                      ≡ Schedule
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Payoff</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: a.color, fontFamily: "monospace" }}>{fmtYr(a.yearsToPayoff)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Total Interest</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: "#e8e8e8", fontFamily: "monospace" }}>{fmtK(a.totalInterest)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Min Payment</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#bbb", fontFamily: "monospace" }}>{fmt$(a.minPayment)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Headroom</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: a.headroom > 0 ? "#22c55e" : "#f97316", fontFamily: "monospace" }}>{fmt$(a.headroom)}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Charts grid */}
@@ -578,7 +812,15 @@ function ComparisonPage({ page, onUpdate }) {
                     tickFormatter={v => "$" + (v / 1000).toFixed(0) + "k"} width={48} />
                   <Tooltip content={<CustomTooltip />} />
                   {amortizations.map(a => (
-                    <Line key={a.id} type="monotone" dataKey={a.name} stroke={a.color} strokeWidth={2} dot={false} />
+                    <Line
+                      key={a.id}
+                      type="monotone"
+                      dataKey={a.name}
+                      stroke={a.color}
+                      strokeWidth={lineWidth(a.id)}
+                      strokeOpacity={lineOpacity(a.id)}
+                      dot={false}
+                    />
                   ))}
                   <ReferenceLine x={12} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
                   <ReferenceLine x={24} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
@@ -596,14 +838,26 @@ function ComparisonPage({ page, onUpdate }) {
                     tickFormatter={v => "$" + (v / 1000).toFixed(0) + "k"} width={48} />
                   <Tooltip content={<CustomTooltip />} />
                   {amortizations.map(a => (
-                    <Line key={a.id} type="monotone" dataKey={a.name} stroke={a.color} strokeWidth={2} dot={false} />
+                    <Line
+                      key={a.id}
+                      type="monotone"
+                      dataKey={a.name}
+                      stroke={a.color}
+                      strokeWidth={lineWidth(a.id)}
+                      strokeOpacity={lineOpacity(a.id)}
+                      dot={false}
+                    />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
 
             {amortizations.map(a => (
-              <ChartCard key={a.id} title={`${a.name} — P&I Breakdown`}>
+              <ChartCard
+                key={a.id}
+                title={`${a.name} — P&I Breakdown`}
+                dimmed={focusedId != null && a.id !== focusedId}
+              >
                 <ResponsiveContainer width="100%" height={220}>
                   <AreaChart
                     data={a.rows.map(r => ({ month: r.month, Interest: r.interest, Principal: r.principal }))}
@@ -640,8 +894,20 @@ function ComparisonPage({ page, onUpdate }) {
                     const worstInterest = Math.max(...amortizations.map(x => x.totalInterest));
                     const savings = worstInterest - a.totalInterest;
                     const strat = strategies[i];
+                    const isFocused = focusedId === a.id;
+                    const isDimmed = focusedId && !isFocused;
                     return (
-                      <tr key={a.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                      <tr
+                        key={a.id}
+                        onClick={() => setFocusedId(isFocused ? null : a.id)}
+                        style={{
+                          borderBottom: "1px solid rgba(255,255,255,0.04)",
+                          opacity: isDimmed ? 0.3 : 1,
+                          transition: "opacity 0.2s ease",
+                          cursor: "pointer",
+                          background: isFocused ? `rgba(${hexToRgb(a.color)}, 0.05)` : "transparent",
+                        }}
+                      >
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ width: 7, height: 7, borderRadius: "50%", background: a.color }} />
@@ -665,8 +931,26 @@ function ComparisonPage({ page, onUpdate }) {
           )}
         </div>
       </div>
+
+      {/* Amortization schedule modal */}
+      {scheduleAmort && scheduleStrat && (
+        <ScheduleModal
+          amort={scheduleAmort}
+          strategy={scheduleStrat}
+          onClose={() => setScheduleStratId(null)}
+        />
+      )}
     </div>
   );
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r}, ${g}, ${b}`;
 }
 
 // ─── APP ROOT ────────────────────────────────────────────────────────────────
