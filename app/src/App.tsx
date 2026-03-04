@@ -295,7 +295,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-function ChartCard({ title, children, dimmed = false, note = null }) {
+function ChartCard({ title, children, dimmed = false }) {
   return (
     <div style={{
       background: "rgba(255,255,255,0.025)",
@@ -307,22 +307,6 @@ function ChartCard({ title, children, dimmed = false, note = null }) {
     }}>
       <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 14 }}>{title}</div>
       {children}
-      {note && (
-        <div style={{
-          marginTop: 10,
-          paddingTop: 8,
-          borderTop: "1px solid rgba(255,255,255,0.05)",
-          fontSize: 10,
-          color: "#4a4a4a",
-          lineHeight: 1.5,
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 5,
-        }}>
-          <span style={{ color: "#3a3a3a", flexShrink: 0 }}>ⓘ</span>
-          <span>{note}</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -873,11 +857,6 @@ function ComparisonPage({ page, onUpdate }) {
                 key={a.id}
                 title={`${a.name} — P&I Breakdown`}
                 dimmed={focusedId != null && a.id !== focusedId}
-                note={
-                  amortizations.length > 1
-                    ? `Per-strategy view — Principal (green) + Interest (orange) stack to equal the total P&I payment. Each strategy has its own chart; stacking multiple loans would produce meaningless totals. Compare all ${amortizations.length} strategies in the Balance and Cumulative Interest charts above.`
-                    : null
-                }
               >
                 <ResponsiveContainer width="100%" height={220}>
                   <AreaChart
