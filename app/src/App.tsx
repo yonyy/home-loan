@@ -807,7 +807,7 @@ function ComparisonPage({ page, onUpdate }) {
                 <LineChart data={balanceData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="month" tick={{ fill: "#555", fontSize: 10 }} tickLine={false}
-                    tickFormatter={v => v % 60 === 0 ? `${v / 12}yr` : ""} />
+                    ticks={xTicks(maxMonths)} tickFormatter={v => `${v / 12}yr`} />
                   <YAxis tick={{ fill: "#555", fontSize: 10 }} tickLine={false}
                     tickFormatter={v => "$" + (v / 1000).toFixed(0) + "k"} width={48} />
                   <Tooltip content={<CustomTooltip />} />
@@ -833,7 +833,7 @@ function ComparisonPage({ page, onUpdate }) {
                 <LineChart data={interestData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="month" tick={{ fill: "#555", fontSize: 10 }} tickLine={false}
-                    tickFormatter={v => v % 60 === 0 ? `${v / 12}yr` : ""} />
+                    ticks={xTicks(maxMonths)} tickFormatter={v => `${v / 12}yr`} />
                   <YAxis tick={{ fill: "#555", fontSize: 10 }} tickLine={false}
                     tickFormatter={v => "$" + (v / 1000).toFixed(0) + "k"} width={48} />
                   <Tooltip content={<CustomTooltip />} />
@@ -865,7 +865,7 @@ function ComparisonPage({ page, onUpdate }) {
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                     <XAxis dataKey="month" tick={{ fill: "#555", fontSize: 10 }} tickLine={false}
-                      tickFormatter={v => v % 60 === 0 ? `${v / 12}yr` : ""} />
+                      ticks={xTicks(a.rows.length)} tickFormatter={v => `${v / 12}yr`} />
                     <YAxis tick={{ fill: "#555", fontSize: 10 }} tickLine={false}
                       tickFormatter={v => "$" + (v / 1000).toFixed(1) + "k"} width={48} />
                     <Tooltip content={<CustomTooltip />} />
@@ -945,6 +945,15 @@ function ComparisonPage({ page, onUpdate }) {
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
+
+/** Returns evenly-spaced month tick positions that will always render labels.
+ *  ≤10 yrs → every year | ≤20 yrs → every 2 yrs | >20 yrs → every 5 yrs */
+function xTicks(totalMonths) {
+  const interval = totalMonths <= 120 ? 12 : totalMonths <= 240 ? 24 : 60;
+  const ticks = [];
+  for (let m = interval; m <= totalMonths; m += interval) ticks.push(m);
+  return ticks;
+}
 
 function hexToRgb(hex) {
   const r = parseInt(hex.slice(1, 3), 16);
