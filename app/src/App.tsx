@@ -1528,8 +1528,8 @@ function ComparisonPage({ page, onUpdate }) {
                     <YAxis tick={{ fill: "#555", fontSize: 10 }} tickLine={false}
                       tickFormatter={v => "$" + (v / 1000).toFixed(1) + "k"} width={48} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="Interest" stackId="1" stroke="#f97316" fill="#f9731622" strokeWidth={1.5} />
-                    <Area type="monotone" dataKey="Principal" stackId="1" stroke="#22c55e" fill="#22c55e22" strokeWidth={1.5} />
+                    <Area type="monotone" dataKey="Interest" stroke="#f97316" fill="#f9731633" strokeWidth={1.5} />
+                    <Area type="monotone" dataKey="Principal" stroke="#22c55e" fill="#22c55e22" strokeWidth={1.5} />
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartCard>
