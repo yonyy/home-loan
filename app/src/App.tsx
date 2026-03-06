@@ -551,10 +551,539 @@ function Legend({ onClose }) {
   );
 }
 
+// ─── ONBOARDING CAROUSEL ─────────────────────────────────────────────────────
+
+function MockSummaryCards() {
+  const cards = [
+    { name: "ARM — Stay & Pay $5k", color: "#f97316", payoff: "22.3 yrs", interest: "$412k", minPmt: "$3,118", headroom: "$1,882", headroomColor: "#22c55e" },
+    { name: "Refi 30-yr @ 5.3%",    color: "#22c55e", payoff: "18.7 yrs", interest: "$338k", minPmt: "$3,142", headroom: "$1,858", headroomColor: "#22c55e" },
+    { name: "Refi 15-yr @ 5.3%",    color: "#3b82f6", payoff: "15.0 yrs", interest: "$221k", minPmt: "$4,533", headroom: "$467",   headroomColor: "#22c55e" },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
+      {/* top nav mock */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 14px", background:"rgba(0,0,0,0.5)", borderRadius:8, border:"1px solid rgba(255,255,255,0.07)", marginBottom:4 }}>
+        <div style={{ width:18, height:18, borderRadius:4, background:"linear-gradient(135deg,#3b82f6,#22c55e)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9 }}>⌂</div>
+        <span style={{ fontSize:10, fontWeight:700, color:"#e8e8e8" }}>HomeLoan</span>
+        <div style={{ width:1, height:14, background:"rgba(255,255,255,0.1)", margin:"0 6px" }} />
+        <span style={{ fontSize:10, color:"#3b82f6", fontWeight:600, borderBottom:"1.5px solid #3b82f6", paddingBottom:1 }}>Comparison 1</span>
+        <div style={{ marginLeft:"auto", fontSize:10, color:"#3b82f6", background:"rgba(59,130,246,0.12)", border:"1px solid rgba(59,130,246,0.3)", borderRadius:4, padding:"2px 7px" }}>⚙ Edit</div>
+      </div>
+      {/* cards row */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+        {cards.map(c => (
+          <div key={c.name} style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${c.color}44`, borderRadius:8, padding:"10px 11px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:8 }}>
+              <div style={{ width:6, height:6, borderRadius:"50%", background:c.color, flexShrink:0 }} />
+              <span style={{ fontSize:8, fontWeight:700, color:"#bbb", lineHeight:1.2 }}>{c.name}</span>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:5 }}>
+              {[["Payoff", c.payoff, c.color],["Total Interest", c.interest,"#e8e8e8"],["Min Payment", c.minPmt,"#bbb"],["Headroom", c.headroom, c.headroomColor]].map(([lbl,val,col]) => (
+                <div key={lbl}>
+                  <div style={{ fontSize:7, color:"#555", textTransform:"uppercase", letterSpacing:"0.06em" }}>{lbl}</div>
+                  <div style={{ fontSize:10, fontWeight:700, color:col as string, fontFamily:"monospace" }}>{val}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MockComparisonTable() {
+  const rows = [
+    { name:"ARM — Stay & Pay $5k",  color:"#f97316", target:"$5,000", min:"$3,118", headroom:"$1,882", payoff:"22.3 yrs", interest:"$412,440", savings:"—",        savingsColor:"#666" },
+    { name:"Refi 30-yr @ 5.3%",     color:"#22c55e", target:"$5,000", min:"$3,142", headroom:"$1,858", payoff:"18.7 yrs", interest:"$338,201", savings:"+$74,239", savingsColor:"#22c55e" },
+    { name:"Refi 15-yr @ 5.3%",     color:"#3b82f6", target:"—",      min:"$4,533", headroom:"$467",   payoff:"15.0 yrs", interest:"$221,084", savings:"+$191,356",savingsColor:"#22c55e" },
+  ];
+  const cols = ["Strategy","Target Pmt","Min Pmt","Headroom","Payoff","Total Interest","Savings vs Worst"];
+  return (
+    <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:8 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 12px", background:"rgba(0,0,0,0.5)", borderRadius:8, border:"1px solid rgba(255,255,255,0.07)", marginBottom:2 }}>
+        <div style={{ width:18, height:18, borderRadius:4, background:"linear-gradient(135deg,#3b82f6,#22c55e)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9 }}>⌂</div>
+        <span style={{ fontSize:10, fontWeight:700, color:"#e8e8e8" }}>HomeLoan</span>
+      </div>
+      <div style={{ background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:8, overflow:"hidden" }}>
+        <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,0.08)", padding:"6px 10px", gap:6 }}>
+          {cols.map(c => <div key={c} style={{ flex:c==="Strategy"?2:1, fontSize:7, color:"#555", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>{c}</div>)}
+        </div>
+        {rows.map((r,i) => (
+          <div key={r.name} style={{ display:"flex", alignItems:"center", padding:"7px 10px", gap:6, borderBottom: i<rows.length-1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+            <div style={{ flex:2, display:"flex", alignItems:"center", gap:5 }}>
+              <div style={{ width:5, height:5, borderRadius:"50%", background:r.color }} />
+              <span style={{ fontSize:8, fontWeight:600, color:"#ccc" }}>{r.name}</span>
+            </div>
+            <div style={{ flex:1, fontSize:8, color:"#bbb", fontFamily:"monospace" }}>{r.target}</div>
+            <div style={{ flex:1, fontSize:8, color:"#bbb", fontFamily:"monospace" }}>{r.min}</div>
+            <div style={{ flex:1, fontSize:8, color:"#22c55e", fontFamily:"monospace" }}>{r.headroom}</div>
+            <div style={{ flex:1, fontSize:8, color:r.color, fontFamily:"monospace", fontWeight:700 }}>{r.payoff}</div>
+            <div style={{ flex:1, fontSize:8, color:"#e8e8e8", fontFamily:"monospace" }}>{r.interest}</div>
+            <div style={{ flex:1, fontSize:8, color:r.savingsColor, fontFamily:"monospace" }}>{r.savings}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MockBalanceChart() {
+  const W = 420, H = 170, PAD = { t:10, r:10, b:28, l:44 };
+  const innerW = W - PAD.l - PAD.r, innerH = H - PAD.t - PAD.b;
+  const maxMonths = 268, maxBal = 580000;
+  const scaleX = (m) => PAD.l + (m / maxMonths) * innerW;
+  const scaleY = (v) => PAD.t + (1 - v / maxBal) * innerH;
+  const strategies = [
+    { color:"#f97316", months:267, startBal:568000, rate:0.053 },
+    { color:"#22c55e", months:224, startBal:573000, rate:0.044 },
+    { color:"#3b82f6", months:180, startBal:573000, rate:0.035 },
+  ];
+  const buildPath = (s) => {
+    const pts: string[] = [];
+    for (let m=0; m<=s.months; m+=3) {
+      const decay = Math.pow(1 - (m / s.months) * 0.92, 1.6);
+      const bal = s.startBal * Math.max(0, decay);
+      pts.push(`${m===0?"M":"L"}${scaleX(m).toFixed(1)},${scaleY(bal).toFixed(1)}`);
+    }
+    pts.push(`L${scaleX(s.months).toFixed(1)},${scaleY(0).toFixed(1)}`);
+    return pts.join(" ");
+  };
+  const yTicks = [0, 150000, 300000, 450000, 580000];
+  const xTicks = [0, 60, 120, 180, 240];
+  return (
+    <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:8 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 12px", background:"rgba(0,0,0,0.5)", borderRadius:8, border:"1px solid rgba(255,255,255,0.07)", marginBottom:2 }}>
+        <div style={{ width:18, height:18, borderRadius:4, background:"linear-gradient(135deg,#3b82f6,#22c55e)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9 }}>⌂</div>
+        <span style={{ fontSize:10, fontWeight:700, color:"#e8e8e8" }}>HomeLoan</span>
+      </div>
+      <div style={{ background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:8, padding:"10px 12px" }}>
+        <div style={{ fontSize:8, color:"#666", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Remaining Balance Over Time</div>
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:"visible" }}>
+          {/* grid */}
+          {yTicks.map(v => <line key={v} x1={PAD.l} y1={scaleY(v)} x2={W-PAD.r} y2={scaleY(v)} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />)}
+          {xTicks.map(m => <line key={m} x1={scaleX(m)} y1={PAD.t} x2={scaleX(m)} y2={H-PAD.b} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />)}
+          {/* ARM reset dashes */}
+          <line x1={scaleX(12)} y1={PAD.t} x2={scaleX(12)} y2={H-PAD.b} stroke="rgba(255,255,255,0.18)" strokeWidth={1} strokeDasharray="3,3" />
+          <line x1={scaleX(24)} y1={PAD.t} x2={scaleX(24)} y2={H-PAD.b} stroke="rgba(255,255,255,0.18)" strokeWidth={1} strokeDasharray="3,3" />
+          {/* y axis labels */}
+          {yTicks.map(v => <text key={v} x={PAD.l-4} y={scaleY(v)+3} textAnchor="end" fill="#555" fontSize={7}>${v/1000}k</text>)}
+          {/* x axis labels */}
+          {xTicks.map(m => <text key={m} x={scaleX(m)} y={H-PAD.b+10} textAnchor="middle" fill="#555" fontSize={7}>{m/12}yr</text>)}
+          {/* lines */}
+          {strategies.map(s => <path key={s.color} d={buildPath(s)} stroke={s.color} strokeWidth={1.8} fill="none" />)}
+          {/* payoff dots */}
+          {strategies.map(s => <circle key={s.color+"dot"} cx={scaleX(s.months)} cy={scaleY(0)} r={3} fill={s.color} />)}
+          {/* legend */}
+          {[{color:"#f97316",label:"ARM"},{color:"#22c55e",label:"Refi 30"},{color:"#3b82f6",label:"Refi 15"}].map((l,i) => (
+            <g key={l.color} transform={`translate(${PAD.l + i*80},${H-5})`}>
+              <line x1={0} y1={0} x2={14} y2={0} stroke={l.color} strokeWidth={1.5} />
+              <text x={17} y={3} fill="#888" fontSize={7}>{l.label}</text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function MockInterestChart() {
+  const W = 420, H = 170, PAD = { t:10, r:10, b:28, l:44 };
+  const innerW = W - PAD.l - PAD.r, innerH = H - PAD.t - PAD.b;
+  const maxMonths = 268, maxInterest = 420000;
+  const scaleX = (m) => PAD.l + (m / maxMonths) * innerW;
+  const scaleY = (v) => PAD.t + (1 - v / maxInterest) * innerH;
+  const curves = [
+    { color:"#f97316", months:267, peak:412440 },
+    { color:"#22c55e", months:224, peak:338201 },
+    { color:"#3b82f6", months:180, peak:221084 },
+  ];
+  const buildPath = (c) => {
+    const pts: string[] = [];
+    for (let m=0; m<=c.months; m+=3) {
+      const progress = m / c.months;
+      const v = c.peak * (1 - Math.pow(1 - progress, 1.4));
+      pts.push(`${m===0?"M":"L"}${scaleX(m).toFixed(1)},${scaleY(v).toFixed(1)}`);
+    }
+    return pts.join(" ");
+  };
+  const yTicks = [0, 100000, 200000, 300000, 400000];
+  const xTicks = [0, 60, 120, 180, 240];
+  return (
+    <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:8 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 12px", background:"rgba(0,0,0,0.5)", borderRadius:8, border:"1px solid rgba(255,255,255,0.07)", marginBottom:2 }}>
+        <div style={{ width:18, height:18, borderRadius:4, background:"linear-gradient(135deg,#3b82f6,#22c55e)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9 }}>⌂</div>
+        <span style={{ fontSize:10, fontWeight:700, color:"#e8e8e8" }}>HomeLoan</span>
+      </div>
+      <div style={{ background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:8, padding:"10px 12px" }}>
+        <div style={{ fontSize:8, color:"#666", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Cumulative Interest Paid</div>
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:"visible" }}>
+          {yTicks.map(v => <line key={v} x1={PAD.l} y1={scaleY(v)} x2={W-PAD.r} y2={scaleY(v)} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />)}
+          {xTicks.map(m => <line key={m} x1={scaleX(m)} y1={PAD.t} x2={scaleX(m)} y2={H-PAD.b} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />)}
+          {yTicks.map(v => <text key={v} x={PAD.l-4} y={scaleY(v)+3} textAnchor="end" fill="#555" fontSize={7}>${v/1000}k</text>)}
+          {xTicks.map(m => <text key={m} x={scaleX(m)} y={H-PAD.b+10} textAnchor="middle" fill="#555" fontSize={7}>{m/12}yr</text>)}
+          {/* gap shading between worst and best */}
+          <path
+            d={`${buildPath(curves[0])} L${scaleX(curves[2].months)},${scaleY(curves[2].peak)} ${buildPath(curves[2]).replace("M","L")} Z`}
+            fill="rgba(34,197,94,0.06)"
+          />
+          {curves.map(c => <path key={c.color} d={buildPath(c)} stroke={c.color} strokeWidth={1.8} fill="none" />)}
+          {/* savings callout */}
+          <line x1={scaleX(180)} y1={scaleY(412440*0.82)} x2={scaleX(180)} y2={scaleY(221084)} stroke="rgba(34,197,94,0.4)" strokeWidth={1} strokeDasharray="3,2" />
+          <text x={scaleX(180)+4} y={scaleY((412440*0.82+221084)/2)} fill="#22c55e" fontSize={7} fontWeight="600">$191k saved</text>
+          {[{color:"#f97316",label:"ARM"},{color:"#22c55e",label:"Refi 30"},{color:"#3b82f6",label:"Refi 15"}].map((l,i) => (
+            <g key={l.color} transform={`translate(${PAD.l + i*80},${H-5})`}>
+              <line x1={0} y1={0} x2={14} y2={0} stroke={l.color} strokeWidth={1.5} />
+              <text x={17} y={3} fill="#888" fontSize={7}>{l.label}</text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function MockHeadroomChart() {
+  const bars = [
+    { name:"ARM — Stay & Pay $5k",  color:"#f97316", min:3118, target:5000 },
+    { name:"Refi 30-yr @ 5.3%",     color:"#22c55e", min:3142, target:5000 },
+    { name:"Refi 15-yr @ 5.3%",     color:"#3b82f6", min:4533, target:5000 },
+  ];
+  const maxVal = 5400;
+  return (
+    <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:8 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 12px", background:"rgba(0,0,0,0.5)", borderRadius:8, border:"1px solid rgba(255,255,255,0.07)", marginBottom:2 }}>
+        <div style={{ width:18, height:18, borderRadius:4, background:"linear-gradient(135deg,#3b82f6,#22c55e)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9 }}>⌂</div>
+        <span style={{ fontSize:10, fontWeight:700, color:"#e8e8e8" }}>HomeLoan</span>
+      </div>
+      <div style={{ background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:8, padding:"12px 14px" }}>
+        <div style={{ fontSize:8, color:"#666", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>Monthly Payment Breakdown & Headroom</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          {bars.map(b => {
+            const minPct   = (b.min    / maxVal) * 100;
+            const targetPct= (b.target / maxVal) * 100;
+            const headroom = b.target - b.min;
+            return (
+              <div key={b.name}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                    <div style={{ width:5, height:5, borderRadius:"50%", background:b.color }} />
+                    <span style={{ fontSize:8, fontWeight:600, color:"#ccc" }}>{b.name}</span>
+                  </div>
+                  <span style={{ fontSize:8, color:"#22c55e", fontFamily:"monospace", fontWeight:700 }}>+${headroom.toLocaleString()} headroom</span>
+                </div>
+                <div style={{ position:"relative", height:16, background:"rgba(255,255,255,0.05)", borderRadius:4, overflow:"hidden" }}>
+                  {/* min payment bar */}
+                  <div style={{ position:"absolute", left:0, top:0, height:"100%", width:`${minPct}%`, background:`${b.color}66`, borderRadius:"4px 0 0 4px" }} />
+                  {/* headroom bar */}
+                  <div style={{ position:"absolute", left:`${minPct}%`, top:0, height:"100%", width:`${targetPct - minPct}%`, background:"rgba(34,197,94,0.35)", borderRight:"1.5px solid #22c55e99" }} />
+                  {/* labels */}
+                  <span style={{ position:"absolute", left:`${minPct/2}%`, top:"50%", transform:"translate(-50%,-50%)", fontSize:7, color:"#ddd", fontFamily:"monospace", fontWeight:600 }}>${(b.min/1000).toFixed(1)}k min</span>
+                  <span style={{ position:"absolute", left:`${(minPct+targetPct)/2}%`, top:"50%", transform:"translate(-50%,-50%)", fontSize:7, color:"#22c55e", fontFamily:"monospace", fontWeight:600 }}>+${(headroom/1000).toFixed(1)}k</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display:"flex", gap:14, marginTop:12 }}>
+          {[{color:"rgba(255,165,0,0.5)", label:"Min P+I+Escrow"},{color:"rgba(34,197,94,0.35)", label:"Headroom (extra principal)"}].map(l => (
+            <div key={l.label} style={{ display:"flex", alignItems:"center", gap:5 }}>
+              <div style={{ width:10, height:6, borderRadius:2, background:l.color }} />
+              <span style={{ fontSize:7, color:"#666" }}>{l.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const ONBOARDING_SLIDES = [
+  {
+    tag: "Welcome",
+    headline: "Model your mortgage.",
+    subheadline: "Compare strategies side-by-side.",
+    body: "HomeLoan is a precision tool for homeowners who want to take control of their loan — whether you're sitting on an ARM about to reset, weighing a refinance, or simply exploring how extra payments accelerate your payoff.",
+    mock: MockSummaryCards,
+  },
+  {
+    tag: "Compare",
+    headline: "Every strategy, at a glance.",
+    subheadline: "Side-by-side comparison table.",
+    body: "Add multiple loan scenarios — your current ARM, a 30-year refi, a 15-year refi — and see payoff dates, total interest costs, minimum payments, and your savings vs. the worst option, all in one row.",
+    mock: MockComparisonTable,
+  },
+  {
+    tag: "Payoff",
+    headline: "See exactly when you're debt-free.",
+    subheadline: "Balance trajectory over time.",
+    body: "The balance chart plots every strategy on a shared timeline. Watch lines converge to zero at different dates — a 15-year refi clears the debt nearly 7 years ahead of staying on the ARM.",
+    mock: MockBalanceChart,
+  },
+  {
+    tag: "Interest",
+    headline: "Quantify the real cost.",
+    subheadline: "Cumulative interest — the true price of each path.",
+    body: "Refinancing into a 15-year loan can save over $191k in interest versus staying on an ARM. The gap is highlighted directly on the chart so you never have to do the math yourself.",
+    mock: MockInterestChart,
+  },
+  {
+    tag: "Headroom",
+    headline: "Know your monthly flexibility.",
+    subheadline: "Headroom = target payment − minimum payment.",
+    body: "Headroom shows how much above the minimum you're paying each month — that excess goes straight to principal. The breakdown chart makes it immediately clear which strategies leave you breathing room.",
+    mock: MockHeadroomChart,
+  },
+];
+
+function OnboardingCarousel({ onGetStarted, onLoadSample }: { onGetStarted: () => void; onLoadSample: () => void }) {
+  const [slide, setSlide] = useState(0);
+  const [dir, setDir]     = useState<1 | -1>(1);
+  const [animKey, setAnimKey] = useState(0);
+  const total = ONBOARDING_SLIDES.length;
+
+  const go = (next: number, direction: 1 | -1) => {
+    setDir(direction);
+    setAnimKey(k => k + 1);
+    setSlide(next);
+  };
+  const prev = () => go((slide - 1 + total) % total, -1);
+  const next = () => go((slide + 1) % total,          1);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft")  prev();
+      if (e.key === "ArrowRight") next();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [slide]);
+
+  const s = ONBOARDING_SLIDES[slide];
+  const MockComponent = s.mock;
+  const isLast = slide === total - 1;
+
+  return (
+    <div style={{
+      flex: 1,
+      minWidth: 0,
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "28px 20px 36px",
+      minHeight: "calc(100vh - 48px)",
+      background: "radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.05) 0%, transparent 65%)",
+    }}>
+      <style>{`
+        @keyframes slideInRight  { from { opacity:0; transform:translateX(48px);  } to { opacity:1; transform:translateX(0); } }
+        @keyframes slideInLeft   { from { opacity:0; transform:translateX(-48px); } to { opacity:1; transform:translateX(0); } }
+        .slide-enter-right { animation: slideInRight 0.32s cubic-bezier(0.22,1,0.36,1) both; }
+        .slide-enter-left  { animation: slideInLeft  0.32s cubic-bezier(0.22,1,0.36,1) both; }
+      `}</style>
+
+      {/* Main card */}
+      <div style={{
+        width: "100%",
+        maxWidth: 960,
+        background: "rgba(255,255,255,0.025)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 20,
+        overflow: "hidden",
+        boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
+      }}>
+        {/* Progress bar */}
+        <div style={{ height: 2, background: "rgba(255,255,255,0.06)" }}>
+          <div style={{
+            height: "100%",
+            width: `${((slide + 1) / total) * 100}%`,
+            background: "linear-gradient(90deg, #3b82f6, #22c55e)",
+            transition: "width 0.35s cubic-bezier(0.22,1,0.36,1)",
+          }} />
+        </div>
+
+        <div style={{ display: "flex", minHeight: 440 }}>
+          {/* Left: text panel */}
+          <div style={{
+            width: 280,
+            flexShrink: 0,
+            padding: "36px 32px 36px 36px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            borderRight: "1px solid rgba(255,255,255,0.06)",
+          }}>
+            <div>
+              {/* Tag */}
+              <div style={{
+                display: "inline-block",
+                fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "#3b82f6",
+                background: "rgba(59,130,246,0.1)",
+                border: "1px solid rgba(59,130,246,0.2)",
+                borderRadius: 20,
+                padding: "3px 10px",
+                marginBottom: 20,
+              }}>{s.tag} {slide + 1}/{total}</div>
+
+              {/* Headline */}
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#f0f0f0", lineHeight: 1.2, letterSpacing: "-0.02em", marginBottom: 8 }}>
+                {s.headline}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#3b82f6", marginBottom: 18, letterSpacing: "-0.01em" }}>
+                {s.subheadline}
+              </div>
+              <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7 }}>
+                {s.body}
+              </div>
+            </div>
+
+            {/* CTAs — always visible, primary changes on last slide */}
+            <div style={{ marginTop: 36, display: "flex", flexDirection: "column", gap: 10 }}>
+              <button
+                onClick={onGetStarted}
+                style={{
+                  background: "linear-gradient(135deg, #3b82f6, #22c55e)",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "12px 20px",
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  letterSpacing: "-0.01em",
+                  transition: "opacity 0.15s",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = "0.88")}
+                onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+              >
+                {isLast ? "Get Started →" : "Skip to Get Started →"}
+              </button>
+              <button
+                onClick={onLoadSample}
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: 10,
+                  padding: "11px 20px",
+                  color: "#888",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "color 0.15s, border-color 0.15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = "#ccc"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = "#888"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}
+              >
+                Try with sample data
+              </button>
+            </div>
+          </div>
+
+          {/* Right: mock screenshot */}
+          <div style={{
+            flex: 1,
+            minWidth: 0,
+            padding: "24px 24px",
+            display: "flex",
+            alignItems: "center",
+            background: "rgba(0,0,0,0.2)",
+            overflow: "hidden",
+          }}>
+            <div
+              key={`${slide}-${animKey}`}
+              className={dir === 1 ? "slide-enter-right" : "slide-enter-left"}
+              style={{ width: "100%", minWidth: 0 }}
+            >
+              <MockComponent />
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom nav */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "14px 28px",
+          borderTop: "1px solid rgba(255,255,255,0.06)",
+          background: "rgba(0,0,0,0.15)",
+        }}>
+          {/* Dot indicators */}
+          <div style={{ display: "flex", gap: 6 }}>
+            {ONBOARDING_SLIDES.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => go(i, i > slide ? 1 : -1)}
+                style={{
+                  width: i === slide ? 20 : 6,
+                  height: 6,
+                  borderRadius: 3,
+                  background: i === slide ? "#3b82f6" : "rgba(255,255,255,0.15)",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  transition: "width 0.25s ease, background 0.2s ease",
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Arrow buttons */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={prev}
+              style={{
+                width: 34, height: 34,
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "#888",
+                fontSize: 16,
+                cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.15s, color 0.15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "#ddd"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "#888"; }}
+            >‹</button>
+            <button
+              onClick={next}
+              style={{
+                width: 34, height: 34,
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "#888",
+                fontSize: 16,
+                cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.15s, color 0.15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "#ddd"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "#888"; }}
+            >›</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Keyboard hint */}
+      <div style={{ marginTop: 16, fontSize: 11, color: "#444", display: "flex", alignItems: "center", gap: 6 }}>
+        <kbd style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:4, padding:"1px 6px", fontSize:10, color:"#666" }}>←</kbd>
+        <kbd style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:4, padding:"1px 6px", fontSize:10, color:"#666" }}>→</kbd>
+        <span>to navigate</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── COMPARISON PAGE ─────────────────────────────────────────────────────────
 
 function ComparisonPage({ page, onUpdate }) {
-  const [editMode, setEditMode] = useState(page.strategies.length === 0);
+  const [editMode, setEditMode] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [focusedId, setFocusedId] = useState(null);
   const [scheduleStratId, setScheduleStratId] = useState(null);
@@ -725,8 +1254,19 @@ function ComparisonPage({ page, onUpdate }) {
           </div>
         )}
 
+        {/* Empty state: onboarding carousel */}
+        {strategies.length === 0 && !editMode && (
+          <OnboardingCarousel
+            onGetStarted={() => {
+              addStrategy();
+              setEditMode(true);
+            }}
+            onLoadSample={() => setStrategies(DEFAULT_STRATEGIES)}
+          />
+        )}
+
         {/* Main dashboard */}
-        <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
+        {strategies.length > 0 && <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
 
           {/* Summary cards */}
           <div style={{
@@ -956,7 +1496,7 @@ function ComparisonPage({ page, onUpdate }) {
               </table>
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* Amortization schedule modal */}
@@ -994,7 +1534,7 @@ function hexToRgb(hex) {
 const defaultPage = () => ({
   id: `page-${Date.now()}`,
   title: "Comparison 1",
-  strategies: DEFAULT_STRATEGIES,
+  strategies: import.meta.env.DEV ? DEFAULT_STRATEGIES : [],
   createdAt: new Date().toISOString(),
 });
 
