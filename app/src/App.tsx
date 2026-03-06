@@ -1119,6 +1119,11 @@ function ComparisonPage({ page, onUpdate }) {
     [amortizations, maxMonths]
   );
 
+  const headroomMaxVal = useMemo(() =>
+    Math.max(...amortizations.map((a, i) => strategies[i]?.targetPayment ?? a.minPayment)),
+    [amortizations, strategies]
+  );
+
   const addStrategy = () => {
     const idx = strategies.length % PALETTE.length;
     setStrategies([...strategies, {
@@ -1419,6 +1424,92 @@ function ComparisonPage({ page, onUpdate }) {
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
+
+            {/* ── PAYMENT BREAKDOWN & HEADROOM ─────────────────────────── */}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <div style={{
+                background: "rgba(255,255,255,0.025)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                borderRadius: 12,
+                padding: "16px 18px",
+              }}>
+                <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 18 }}>
+                  Monthly Payment Breakdown &amp; Headroom
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                  {amortizations.map((a, i) => {
+                    const strat     = strategies[i];
+                    const targetVal = strat?.targetPayment ?? a.minPayment;
+                    const minPct    = (a.minPayment / headroomMaxVal) * 100;
+                    const targetPct = (targetVal    / headroomMaxVal) * 100;
+                    const isFocused = focusedId === a.id;
+                    const isDimmed  = focusedId && !isFocused;
+                    return (
+                      <div
+                        key={a.id}
+                        onClick={() => setFocusedId(isFocused ? null : a.id)}
+                        style={{ opacity: isDimmed ? 0.3 : 1, transition: "opacity 0.2s ease", cursor: "pointer" }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 7 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                            <div style={{ width: 7, height: 7, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
+                            <span style={{ fontSize: 12, fontWeight: 600, color: isFocused ? "#e8e8e8" : "#ccc" }}>{a.name}</span>
+                          </div>
+                          <span style={{
+                            fontSize: 11, fontFamily: "monospace", fontWeight: 700,
+                            color: a.headroom > 0 ? "#22c55e" : a.headroom === 0 ? "#555" : "#f97316",
+                          }}>
+                            {a.headroom > 0 ? `+${fmt$(a.headroom)} headroom` : a.headroom === 0 ? "at minimum" : `${fmt$(a.headroom)} short`}
+                          </span>
+                        </div>
+                        <div style={{ position: "relative", height: 28, background: "rgba(255,255,255,0.05)", borderRadius: 6, overflow: "hidden" }}>
+                          <div style={{
+                            position: "absolute", left: 0, top: 0, height: "100%",
+                            width: `${minPct}%`,
+                            background: `${a.color}55`,
+                            borderRadius: a.headroom > 0 ? "6px 0 0 6px" : "6px",
+                            transition: "width 0.4s ease",
+                          }} />
+                          {a.headroom > 0 && (
+                            <div style={{
+                              position: "absolute", left: `${minPct}%`, top: 0, height: "100%",
+                              width: `${targetPct - minPct}%`,
+                              background: "rgba(34,197,94,0.22)",
+                              borderRight: "2px solid rgba(34,197,94,0.6)",
+                              transition: "width 0.4s ease, left 0.4s ease",
+                            }} />
+                          )}
+                          <span style={{
+                            position: "absolute", left: `${minPct / 2}%`, top: "50%",
+                            transform: "translate(-50%, -50%)",
+                            fontSize: 10, color: "#ddd", fontFamily: "monospace", fontWeight: 600,
+                            whiteSpace: "nowrap", pointerEvents: "none",
+                          }}>{fmt$(a.minPayment)} min</span>
+                          {a.headroom > 0 && (targetPct - minPct) > 8 && (
+                            <span style={{
+                              position: "absolute", left: `${(minPct + targetPct) / 2}%`, top: "50%",
+                              transform: "translate(-50%, -50%)",
+                              fontSize: 10, color: "#22c55e", fontFamily: "monospace", fontWeight: 700,
+                              whiteSpace: "nowrap", pointerEvents: "none",
+                            }}>+{fmt$(a.headroom)}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 20, marginTop: 18, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 14, height: 8, borderRadius: 2, background: "rgba(255,255,255,0.2)" }} />
+                    <span style={{ fontSize: 10, color: "#555" }}>Min P+I+Escrow</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 14, height: 8, borderRadius: 2, background: "rgba(34,197,94,0.22)", outline: "1.5px solid rgba(34,197,94,0.5)" }} />
+                    <span style={{ fontSize: 10, color: "#555" }}>Headroom — extra goes to principal</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {amortizations.map(a => (
               <ChartCard
