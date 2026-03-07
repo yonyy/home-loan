@@ -76,7 +76,7 @@ function buildAmortization(strategy) {
 const DEFAULT_STRATEGIES = [
   {
     id: "arm-5k",
-    name: "ARM — Stay & Pay $5k",
+    name: "2-1 Buydown — Stay & Pay $5k",
     color: "#f97316",
     loanType: "arm",
     balance: 567992.60,
@@ -212,7 +212,7 @@ function StrategyForm({ strategy, onChange, onDelete }) {
         </Field>
         <Field label="Loan Type">
           <select value={strategy.loanType} onChange={e => upd("loanType", e.target.value)} style={inputStyle()}>
-            <option value="arm">ARM</option>
+            <option value="arm">2-1 Buydown</option>
             <option value="fixed">Fixed (New)</option>
             <option value="refi">Refi (Fixed)</option>
           </select>
@@ -492,7 +492,7 @@ const LEGEND_ITEMS = [
     term: "Dashed Lines on Balance Chart",
     color: "#888",
     icon: "┊",
-    def: "Vertical dashed lines at Month 12 and Month 24 mark the ARM rate step-up points. Month 12: the rate adjusts from Year-1 rate to Year-2 rate. Month 24: it steps again to the Year-3+ rate. Only relevant for ARM strategies — fixed/refi strategies are unaffected by these boundaries.",
+    def: "Vertical dashed lines at Month 12 and Month 24 mark the 2-1 buydown rate step-up points. Month 12: the rate steps from the Year-1 discounted rate to the Year-2 rate. Month 24: it steps again to the permanent Year-3+ rate, where it stays for the life of the loan. Only relevant for 2-1 buydown strategies — fixed/refi strategies are unaffected by these boundaries.",
   },
 ];
 
@@ -555,7 +555,7 @@ function Legend({ onClose }) {
 
 function MockSummaryCards() {
   const cards = [
-    { name: "ARM — Stay & Pay $5k", color: "#f97316", payoff: "22.3 yrs", interest: "$412k", minPmt: "$3,118", headroom: "$1,882", headroomColor: "#22c55e" },
+    { name: "2-1 Buydown — Stay & Pay $5k", color: "#f97316", payoff: "22.3 yrs", interest: "$412k", minPmt: "$3,118", headroom: "$1,882", headroomColor: "#22c55e" },
     { name: "Refi 30-yr @ 5.3%",    color: "#22c55e", payoff: "18.7 yrs", interest: "$338k", minPmt: "$3,142", headroom: "$1,858", headroomColor: "#22c55e" },
     { name: "Refi 15-yr @ 5.3%",    color: "#3b82f6", payoff: "15.0 yrs", interest: "$221k", minPmt: "$4,533", headroom: "$467",   headroomColor: "#22c55e" },
   ];
@@ -594,7 +594,7 @@ function MockSummaryCards() {
 
 function MockComparisonTable() {
   const rows = [
-    { name:"ARM — Stay & Pay $5k",  color:"#f97316", target:"$5,000", min:"$3,118", headroom:"$1,882", payoff:"22.3 yrs", interest:"$412,440", savings:"—",        savingsColor:"#666" },
+    { name:"2-1 Buydown — Stay & Pay $5k",  color:"#f97316", target:"$5,000", min:"$3,118", headroom:"$1,882", payoff:"22.3 yrs", interest:"$412,440", savings:"—",        savingsColor:"#666" },
     { name:"Refi 30-yr @ 5.3%",     color:"#22c55e", target:"$5,000", min:"$3,142", headroom:"$1,858", payoff:"18.7 yrs", interest:"$338,201", savings:"+$74,239", savingsColor:"#22c55e" },
     { name:"Refi 15-yr @ 5.3%",     color:"#3b82f6", target:"—",      min:"$4,533", headroom:"$467",   payoff:"15.0 yrs", interest:"$221,084", savings:"+$191,356",savingsColor:"#22c55e" },
   ];
@@ -663,7 +663,7 @@ function MockBalanceChart() {
           {/* grid */}
           {yTicks.map(v => <line key={v} x1={PAD.l} y1={scaleY(v)} x2={W-PAD.r} y2={scaleY(v)} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />)}
           {xTicks.map(m => <line key={m} x1={scaleX(m)} y1={PAD.t} x2={scaleX(m)} y2={H-PAD.b} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />)}
-          {/* ARM reset dashes */}
+          {/* 2-1 buydown rate step-up dashes (month 12, month 24) */}
           <line x1={scaleX(12)} y1={PAD.t} x2={scaleX(12)} y2={H-PAD.b} stroke="rgba(255,255,255,0.18)" strokeWidth={1} strokeDasharray="3,3" />
           <line x1={scaleX(24)} y1={PAD.t} x2={scaleX(24)} y2={H-PAD.b} stroke="rgba(255,255,255,0.18)" strokeWidth={1} strokeDasharray="3,3" />
           {/* y axis labels */}
@@ -675,7 +675,7 @@ function MockBalanceChart() {
           {/* payoff dots */}
           {strategies.map(s => <circle key={s.color+"dot"} cx={scaleX(s.months)} cy={scaleY(0)} r={3} fill={s.color} />)}
           {/* legend */}
-          {[{color:"#f97316",label:"ARM"},{color:"#22c55e",label:"Refi 30"},{color:"#3b82f6",label:"Refi 15"}].map((l,i) => (
+          {[{color:"#f97316",label:"Buydown"},{color:"#22c55e",label:"Refi 30"},{color:"#3b82f6",label:"Refi 15"}].map((l,i) => (
             <g key={l.color} transform={`translate(${PAD.l + i*80},${H-5})`}>
               <line x1={0} y1={0} x2={14} y2={0} stroke={l.color} strokeWidth={1.5} />
               <text x={17} y={3} fill="#888" fontSize={7}>{l.label}</text>
@@ -731,7 +731,7 @@ function MockInterestChart() {
           {/* savings callout */}
           <line x1={scaleX(180)} y1={scaleY(412440*0.82)} x2={scaleX(180)} y2={scaleY(221084)} stroke="rgba(34,197,94,0.4)" strokeWidth={1} strokeDasharray="3,2" />
           <text x={scaleX(180)+4} y={scaleY((412440*0.82+221084)/2)} fill="#22c55e" fontSize={7} fontWeight="600">$191k saved</text>
-          {[{color:"#f97316",label:"ARM"},{color:"#22c55e",label:"Refi 30"},{color:"#3b82f6",label:"Refi 15"}].map((l,i) => (
+          {[{color:"#f97316",label:"Buydown"},{color:"#22c55e",label:"Refi 30"},{color:"#3b82f6",label:"Refi 15"}].map((l,i) => (
             <g key={l.color} transform={`translate(${PAD.l + i*80},${H-5})`}>
               <line x1={0} y1={0} x2={14} y2={0} stroke={l.color} strokeWidth={1.5} />
               <text x={17} y={3} fill="#888" fontSize={7}>{l.label}</text>
@@ -745,7 +745,7 @@ function MockInterestChart() {
 
 function MockHeadroomChart() {
   const bars = [
-    { name:"ARM — Stay & Pay $5k",  color:"#f97316", min:3118, target:5000 },
+    { name:"2-1 Buydown — Stay & Pay $5k",  color:"#f97316", min:3118, target:5000 },
     { name:"Refi 30-yr @ 5.3%",     color:"#22c55e", min:3142, target:5000 },
     { name:"Refi 15-yr @ 5.3%",     color:"#3b82f6", min:4533, target:5000 },
   ];
@@ -803,28 +803,28 @@ const ONBOARDING_SLIDES = [
     tag: "Welcome",
     headline: "Model your mortgage.",
     subheadline: "Compare strategies side-by-side.",
-    body: "HomeLoan is a precision tool for homeowners who want to take control of their loan — whether you're sitting on an ARM about to reset, weighing a refinance, or simply exploring how extra payments accelerate your payoff.",
+    body: "HomeLoan is a precision tool for homeowners who want to take control of their loan — whether you're in a 2-1 buydown approaching the permanent rate, weighing a refinance, or simply exploring how extra payments accelerate your payoff.",
     mock: MockSummaryCards,
   },
   {
     tag: "Compare",
     headline: "Every strategy, at a glance.",
     subheadline: "Side-by-side comparison table.",
-    body: "Add multiple loan scenarios — your current ARM, a 30-year refi, a 15-year refi — and see payoff dates, total interest costs, minimum payments, and your savings vs. the worst option, all in one row.",
+    body: "Add multiple loan scenarios — your current 2-1 buydown, a 30-year refi, a 15-year refi — and see payoff dates, total interest costs, minimum payments, and your savings vs. the worst option, all in one row.",
     mock: MockComparisonTable,
   },
   {
     tag: "Payoff",
     headline: "See exactly when you're debt-free.",
     subheadline: "Balance trajectory over time.",
-    body: "The balance chart plots every strategy on a shared timeline. Watch lines converge to zero at different dates — a 15-year refi clears the debt nearly 7 years ahead of staying on the ARM.",
+    body: "The balance chart plots every strategy on a shared timeline. Watch lines converge to zero at different dates — a 15-year refi clears the debt years ahead of staying in the 2-1 buydown at minimum payments.",
     mock: MockBalanceChart,
   },
   {
     tag: "Interest",
     headline: "Quantify the real cost.",
     subheadline: "Cumulative interest — the true price of each path.",
-    body: "Refinancing into a 15-year loan can save over $191k in interest versus staying on an ARM. The gap is highlighted directly on the chart so you never have to do the math yourself.",
+    body: "Refinancing into a 15-year loan can save over $191k in interest versus staying in a 2-1 buydown at minimum payments. The gap is highlighted directly on the chart so you never have to do the math yourself.",
     mock: MockInterestChart,
   },
   {
