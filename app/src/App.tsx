@@ -16,7 +16,7 @@ function buildAmortization(strategy) {
   const startBalance = loanType === "refi" ? balance + (closingCosts || 0) : balance;
 
   const minPI = loanType === "arm"
-    ? calcFixedPI(startBalance, armRates?.[0] || 0.04375, 30)
+    ? calcFixedPI(startBalance, armRates?.[2] || armRates?.[0] || 0.04375, 30)
     : calcFixedPI(startBalance, fixedRate, fixedTerm);
   const effectivePayment = targetPayment != null ? targetPayment : minPI + escrow;
 
@@ -56,7 +56,7 @@ function buildAmortization(strategy) {
   }
 
   const minPayment = loanType === "arm"
-    ? calcFixedPI(startBalance, (armRates?.[0] || 0.04375), 30) + escrow
+    ? calcFixedPI(startBalance, (armRates?.[2] || armRates?.[0] || 0.04375), 30) + escrow
     : calcFixedPI(startBalance, fixedRate, fixedTerm) + escrow;
 
   return {
