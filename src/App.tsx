@@ -1,6 +1,8 @@
 // @ts-nocheck
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot, Label } from "recharts";
+import { ARMCliffBanner } from "./components/ARMCliffBanner";
+import { computeWinners, generateTradeoff } from "./logic/tradeoffUtils";
 
 // ─── MORTGAGE ENGINE ────────────────────────────────────────────────────────
 
@@ -12,7 +14,12 @@ function calcFixedPI(principal, annualRate, years) {
 }
 
 function buildAmortization(strategy) {
-  const { balance, escrow, targetPayment, loanType, armRates, fixedRate, fixedTerm, closingCosts } = strategy;
+  const {
+    balance, escrow, targetPayment, loanType, armRates, fixedRate, fixedTerm, closingCosts,
+    currentLoanMonth = 0,
+    armYear1Months = 12,
+    armYear2Months = 12,
+  } = strategy;
   const startBalance = loanType === "refi" ? balance + (closingCosts || 0) : balance;
 
   const minPI = loanType === "arm"
@@ -25,11 +32,17 @@ function buildAmortization(strategy) {
   let month = 1;
   let totalInterest = 0;
 
+  // ARM boundary months are relative to the simulation start (month 1).
+  // currentLoanMonth tells us how far into the ARM period we already are,
+  // so the boundaries shift accordingly.
+  const simYear1End = Math.max(0, armYear1Months - currentLoanMonth);
+  const simYear2End = simYear1End + armYear2Months;
+
   while (remaining > 0.01 && month <= 480) {
     let rate;
     if (loanType === "arm") {
-      if (month <= 12) rate = armRates[0] / 12;
-      else if (month <= 24) rate = armRates[1] / 12;
+      if (month <= simYear1End) rate = armRates[0] / 12;
+      else if (month <= simYear2End) rate = armRates[1] / 12;
       else rate = armRates[2] / 12;
     } else {
       rate = fixedRate / 12;
@@ -59,6 +72,16 @@ function buildAmortization(strategy) {
     ? calcFixedPI(startBalance, (armRates?.[2] || armRates?.[0] || 0.04375), 30) + escrow
     : calcFixedPI(startBalance, fixedRate, fixedTerm) + escrow;
 
+  // ARM countdown: months from now until each rate step-up.
+  // simYear1End is already 0 if we're already past year-1.
+  const armCountdown = loanType === "arm" ? {
+    monthsToYear2: simYear1End,
+    monthsToYear3: simYear2End,
+    year1Rate: armRates[0],
+    year2Rate: armRates[1],
+    year3Rate: armRates[2],
+  } : null;
+
   return {
     rows,
     monthsToPayoff: rows.length,
@@ -68,6 +91,7 @@ function buildAmortization(strategy) {
     headroom: targetPayment != null && targetPayment > minPayment
       ? targetPayment - minPayment
       : 0,
+    armCountdown,
   };
 }
 
@@ -86,6 +110,9 @@ const DEFAULT_STRATEGIES = [
     fixedRate: 0.053,
     fixedTerm: 30,
     closingCosts: 0,
+    currentLoanMonth: 10,
+    armYear1Months: 12,
+    armYear2Months: 12,
   },
   {
     id: "refi-30-5k",
@@ -259,6 +286,9 @@ function StrategyForm({ strategy, onChange, onDelete }) {
           </Field>
           <Field label="Yr 3+ Rate (%)">
             <input type="number" step="0.01" value={(strategy.armRates[2] * 100).toFixed(3)} onChange={e => upd("armRates", [strategy.armRates[0], strategy.armRates[1], parseFloat(e.target.value) / 100])} style={inputStyle()} />
+          </Field>
+          <Field label="Months elapsed in ARM">
+            <input type="number" min="0" max="24" value={strategy.currentLoanMonth ?? 0} onChange={e => updNum("currentLoanMonth", e.target.value)} style={inputStyle()} />
           </Field>
         </>}
       </div>
@@ -1129,6 +1159,110 @@ function OnboardingCarousel({ onGetStarted, onLoadSample }: { onGetStarted: () =
   );
 }
 
+// ─── HEADROOM SECTION ────────────────────────────────────────────────────────
+
+function headroomColor(headroom) {
+  if (headroom >= 300) return "#22c55e";
+  if (headroom > 0)    return "#f97316";
+  if (headroom === 0)  return "#555";
+  return "#ef4444";
+}
+
+function HeadroomSection({ amortizations, strategies, headroomMaxVal, focusedId, onFocus }) {
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.025)",
+      border: "1px solid rgba(255,255,255,0.07)",
+      borderRadius: 12,
+      padding: "16px 18px",
+      marginBottom: 20,
+    }}>
+      <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 18 }}>
+        Monthly Payment Flexibility
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        {amortizations.map((a, i) => {
+          const strat     = strategies[i];
+          const targetVal = strat?.targetPayment ?? a.minPayment;
+          const minPct    = (a.minPayment / headroomMaxVal) * 100;
+          const targetPct = (targetVal    / headroomMaxVal) * 100;
+          const isFocused = focusedId === a.id;
+          const isDimmed  = focusedId && !isFocused;
+          const hColor    = headroomColor(a.headroom);
+          return (
+            <div
+              key={a.id}
+              onClick={() => onFocus(isFocused ? null : a.id)}
+              style={{ opacity: isDimmed ? 0.3 : 1, transition: "opacity 0.2s ease", cursor: "pointer" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 7 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isFocused ? "#e8e8e8" : "#ccc" }}>{a.name}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {a.headroom < 0 && (
+                    <span style={{ fontSize: 10, color: "#ef4444", fontWeight: 600 }}>⚠ Negatively amortizing</span>
+                  )}
+                  <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: hColor }}>
+                    {a.headroom > 0 ? `+${fmt$(a.headroom)} headroom` : a.headroom === 0 ? "at minimum" : `${fmt$(Math.abs(a.headroom))} short`}
+                  </span>
+                </div>
+              </div>
+              <div style={{ position: "relative", height: 28, background: "rgba(255,255,255,0.05)", borderRadius: 6, overflow: "hidden" }}>
+                <div style={{
+                  position: "absolute", left: 0, top: 0, height: "100%",
+                  width: `${Math.min(minPct, 100)}%`,
+                  background: a.headroom < 0 ? "rgba(239,68,68,0.35)" : `${a.color}55`,
+                  borderRadius: a.headroom > 0 ? "6px 0 0 6px" : "6px",
+                  transition: "width 0.4s ease",
+                }} />
+                {a.headroom > 0 && (
+                  <div style={{
+                    position: "absolute", left: `${minPct}%`, top: 0, height: "100%",
+                    width: `${targetPct - minPct}%`,
+                    background: a.headroom >= 300 ? "rgba(34,197,94,0.25)" : "rgba(249,115,22,0.20)",
+                    borderRight: `2px solid ${hColor}99`,
+                    transition: "width 0.4s ease, left 0.4s ease",
+                  }} />
+                )}
+                <span style={{
+                  position: "absolute", left: `${minPct / 2}%`, top: "50%",
+                  transform: "translate(-50%, -50%)",
+                  fontSize: 10, color: "#ddd", fontFamily: "monospace", fontWeight: 600,
+                  whiteSpace: "nowrap", pointerEvents: "none",
+                }}>{fmt$(a.minPayment)} min</span>
+                {a.headroom > 0 && (targetPct - minPct) > 8 && (
+                  <span style={{
+                    position: "absolute", left: `${(minPct + targetPct) / 2}%`, top: "50%",
+                    transform: "translate(-50%, -50%)",
+                    fontSize: 10, fontFamily: "monospace", fontWeight: 700, color: hColor,
+                    whiteSpace: "nowrap", pointerEvents: "none",
+                  }}>+{fmt$(a.headroom)}</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 20, marginTop: 18, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 14, height: 8, borderRadius: 2, background: "rgba(255,255,255,0.2)" }} />
+          <span style={{ fontSize: 10, color: "#555" }}>Min P+I+Escrow</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 14, height: 8, borderRadius: 2, background: "rgba(34,197,94,0.22)", outline: "1.5px solid rgba(34,197,94,0.5)" }} />
+          <span style={{ fontSize: 10, color: "#555" }}>Headroom — extra reduces principal faster</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 14, height: 8, borderRadius: 2, background: "rgba(249,115,22,0.20)", outline: "1.5px solid rgba(249,115,22,0.5)" }} />
+          <span style={{ fontSize: 10, color: "#555" }}>Tight (&lt;$300/mo)</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── COMPARISON PAGE ─────────────────────────────────────────────────────────
 
 function ComparisonPage({ page, onUpdate }) {
@@ -1136,8 +1270,9 @@ function ComparisonPage({ page, onUpdate }) {
   const [showLegend, setShowLegend] = useState(false);
   const [focusedId, setFocusedId] = useState(null);
   const [scheduleStratId, setScheduleStratId] = useState(null);
-  const [activeTab, setActiveTab] = useState("table");
+  const [activeTab, setActiveTab] = useState("charts");
   const [strategies, setStrategies] = useState(page.strategies);
+  const balanceChartRef = useRef(null);
 
   useEffect(() => {
     onUpdate({ ...page, strategies });
@@ -1173,6 +1308,21 @@ function ComparisonPage({ page, onUpdate }) {
     [amortizations, strategies]
   );
 
+  // Winner badges + trade-off sentences
+  const winners = useMemo(() => computeWinners(amortizations), [amortizations]);
+
+  // ARM cliff banner: find the ARM strategy with the most urgent countdown
+  const armBannerData = useMemo(() => {
+    const armPairs = amortizations
+      .map((a, i) => ({ a, s: strategies[i] }))
+      .filter(({ a }) => a.armCountdown != null);
+    if (armPairs.length === 0) return null;
+    // Pick the one with the soonest non-zero step-up
+    const active = armPairs.find(({ a }) => a.armCountdown.monthsToYear2 > 0 || a.armCountdown.monthsToYear3 > 0);
+    if (!active) return null;
+    return { ...active.a.armCountdown, balance: active.s.balance };
+  }, [amortizations, strategies]);
+
   const addStrategy = () => {
     const idx = strategies.length % PALETTE.length;
     setStrategies([...strategies, {
@@ -1187,6 +1337,9 @@ function ComparisonPage({ page, onUpdate }) {
       fixedRate: 0.053,
       fixedTerm: 30,
       closingCosts: 5000,
+      currentLoanMonth: 0,
+      armYear1Months: 12,
+      armYear2Months: 12,
     }]);
   };
 
@@ -1320,8 +1473,20 @@ function ComparisonPage({ page, onUpdate }) {
         )}
 
         {/* Main dashboard */}
-        {strategies.length > 0 && <div style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
+        {strategies.length > 0 && <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
 
+          {/* ARM cliff banner — above everything, full width */}
+          {armBannerData && (
+            <ARMCliffBanner
+              {...armBannerData}
+              onScrollToChart={() => {
+                setActiveTab("charts");
+                setTimeout(() => balanceChartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+              }}
+            />
+          )}
+
+          <div style={{ flex: 1, padding: "24px 28px" }}>
           {/* Summary cards */}
           <div style={{
             display: "grid",
@@ -1332,6 +1497,18 @@ function ComparisonPage({ page, onUpdate }) {
             {amortizations.map(a => {
               const isFocused = focusedId === a.id;
               const isDimmed = focusedId && !isFocused;
+              const tradeoff = generateTradeoff(a, amortizations, winners);
+              const badgeStyle = (bg, border, color) => ({
+                display: "inline-block",
+                padding: "2px 7px",
+                borderRadius: 10,
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                background: bg,
+                border: `1px solid ${border}`,
+                color,
+              });
               return (
                 <div
                   key={a.id}
@@ -1345,14 +1522,35 @@ function ComparisonPage({ page, onUpdate }) {
                     opacity: isDimmed ? 0.38 : 1,
                     transition: "opacity 0.2s ease, border-color 0.15s ease, background 0.15s ease",
                     boxShadow: isFocused ? `0 0 0 1px ${a.color}33, 0 4px 20px ${a.color}18` : "none",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 0,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: a.color }} />
+                  {/* Header row */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
                     <span style={{ fontSize: 12, fontWeight: 700, color: isFocused ? "#e8e8e8" : "#ccc", flex: 1 }}>{a.name}</span>
                     {isFocused && <span style={{ fontSize: 9, color: a.color, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>focused</span>}
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+
+                  {/* Winner badges */}
+                  {winners && (
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10, minHeight: 20 }}>
+                      {winners.lowestInterest === a.id && (
+                        <span style={badgeStyle("rgba(34,197,94,0.12)", "rgba(34,197,94,0.35)", "#22c55e")}>Lowest Interest</span>
+                      )}
+                      {winners.mostHeadroom === a.id && (
+                        <span style={badgeStyle("rgba(59,130,246,0.12)", "rgba(59,130,246,0.35)", "#3b82f6")}>Most Headroom</span>
+                      )}
+                      {winners.fastestPayoff === a.id && (
+                        <span style={badgeStyle("rgba(168,85,247,0.12)", "rgba(168,85,247,0.35)", "#a855f7")}>Fastest Payoff</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Metric grid */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
                     <div>
                       <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Payoff</div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: a.color, fontFamily: "monospace" }}>{fmtYr(a.yearsToPayoff)}</div>
@@ -1367,11 +1565,21 @@ function ComparisonPage({ page, onUpdate }) {
                     </div>
                     <div>
                       <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Headroom</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: a.headroom > 0 ? "#22c55e" : a.headroom === 0 ? "#555" : "#f97316", fontFamily: "monospace" }}>{fmt$(a.headroom)}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: headroomColor(a.headroom), fontFamily: "monospace" }}>{fmt$(a.headroom)}</div>
                     </div>
                   </div>
+
+                  {/* Trade-off sentence */}
+                  <div style={{
+                    fontSize: 11, color: "#666", fontStyle: "italic",
+                    paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.05)",
+                    marginBottom: 8, lineHeight: 1.5,
+                  }}>
+                    {tradeoff}
+                  </div>
+
                   {/* Schedule button */}
-                  <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button
                       onClick={e => { e.stopPropagation(); setScheduleStratId(a.id); }}
                       style={{
@@ -1397,9 +1605,18 @@ function ComparisonPage({ page, onUpdate }) {
             })}
           </div>
 
+          {/* Headroom gauge — always visible above tabs */}
+          <HeadroomSection
+            amortizations={amortizations}
+            strategies={strategies}
+            headroomMaxVal={headroomMaxVal}
+            focusedId={focusedId}
+            onFocus={setFocusedId}
+          />
+
           {/* Tab bar */}
           <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.08)", marginBottom: 20 }}>
-            {[{ id: "table", label: "Strategy Comparison" }, { id: "charts", label: "Charts" }].map(tab => (
+            {[{ id: "charts", label: "Charts" }, { id: "table", label: "Detailed Table" }].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
@@ -1424,6 +1641,7 @@ function ComparisonPage({ page, onUpdate }) {
 
           {/* ── CHARTS TAB ─────────────────────────────────────────────── */}
           {activeTab === "charts" && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            <div ref={balanceChartRef}>
             <ChartCard title="Remaining Balance Over Time">
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={balanceData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -1444,11 +1662,39 @@ function ComparisonPage({ page, onUpdate }) {
                       dot={false}
                     />
                   ))}
-                  <ReferenceLine x={12} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
-                  <ReferenceLine x={24} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
+                  {/* ARM cliff reference lines with labels */}
+                  {armBannerData && armBannerData.monthsToYear2 > 0 && (
+                    <ReferenceLine x={armBannerData.monthsToYear2} stroke="rgba(249,115,22,0.35)" strokeDasharray="4 3">
+                      <Label value={`→ ${(armBannerData.year2Rate * 100).toFixed(3)}%`} position="insideTopRight" fill="#f97316" fontSize={9} />
+                    </ReferenceLine>
+                  )}
+                  {armBannerData && armBannerData.monthsToYear3 > 0 && (
+                    <ReferenceLine x={armBannerData.monthsToYear3} stroke="rgba(239,68,68,0.35)" strokeDasharray="4 3">
+                      <Label value={`→ ${(armBannerData.year3Rate * 100).toFixed(3)}%`} position="insideTopRight" fill="#ef4444" fontSize={9} />
+                    </ReferenceLine>
+                  )}
+                  {/* Fallback: static lines when no ARM banner data */}
+                  {!armBannerData && (
+                    <>
+                      <ReferenceLine x={12} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
+                      <ReferenceLine x={24} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
+                    </>
+                  )}
+                  {/* Payoff dots at y=0 for each strategy */}
+                  {amortizations.map(a => (
+                    <ReferenceDot
+                      key={`dot-${a.id}`}
+                      x={a.monthsToPayoff}
+                      y={0}
+                      r={4}
+                      fill={a.color}
+                      stroke="none"
+                    />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
+            </div>{/* end balanceChartRef wrapper */}
 
             <ChartCard title="Cumulative Interest Paid">
               <ResponsiveContainer width="100%" height={240}>
@@ -1474,91 +1720,7 @@ function ComparisonPage({ page, onUpdate }) {
               </ResponsiveContainer>
             </ChartCard>
 
-            {/* ── PAYMENT BREAKDOWN & HEADROOM ─────────────────────────── */}
-            <div style={{ gridColumn: "1 / -1" }}>
-              <div style={{
-                background: "rgba(255,255,255,0.025)",
-                border: "1px solid rgba(255,255,255,0.07)",
-                borderRadius: 12,
-                padding: "16px 18px",
-              }}>
-                <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 18 }}>
-                  Monthly Payment Breakdown &amp; Headroom
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                  {amortizations.map((a, i) => {
-                    const strat     = strategies[i];
-                    const targetVal = strat?.targetPayment ?? a.minPayment;
-                    const minPct    = (a.minPayment / headroomMaxVal) * 100;
-                    const targetPct = (targetVal    / headroomMaxVal) * 100;
-                    const isFocused = focusedId === a.id;
-                    const isDimmed  = focusedId && !isFocused;
-                    return (
-                      <div
-                        key={a.id}
-                        onClick={() => setFocusedId(isFocused ? null : a.id)}
-                        style={{ opacity: isDimmed ? 0.3 : 1, transition: "opacity 0.2s ease", cursor: "pointer" }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 7 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                            <div style={{ width: 7, height: 7, borderRadius: "50%", background: a.color, flexShrink: 0 }} />
-                            <span style={{ fontSize: 12, fontWeight: 600, color: isFocused ? "#e8e8e8" : "#ccc" }}>{a.name}</span>
-                          </div>
-                          <span style={{
-                            fontSize: 11, fontFamily: "monospace", fontWeight: 700,
-                            color: a.headroom > 0 ? "#22c55e" : a.headroom === 0 ? "#555" : "#f97316",
-                          }}>
-                            {a.headroom > 0 ? `+${fmt$(a.headroom)} headroom` : a.headroom === 0 ? "at minimum" : `${fmt$(a.headroom)} short`}
-                          </span>
-                        </div>
-                        <div style={{ position: "relative", height: 28, background: "rgba(255,255,255,0.05)", borderRadius: 6, overflow: "hidden" }}>
-                          <div style={{
-                            position: "absolute", left: 0, top: 0, height: "100%",
-                            width: `${minPct}%`,
-                            background: `${a.color}55`,
-                            borderRadius: a.headroom > 0 ? "6px 0 0 6px" : "6px",
-                            transition: "width 0.4s ease",
-                          }} />
-                          {a.headroom > 0 && (
-                            <div style={{
-                              position: "absolute", left: `${minPct}%`, top: 0, height: "100%",
-                              width: `${targetPct - minPct}%`,
-                              background: "rgba(34,197,94,0.22)",
-                              borderRight: "2px solid rgba(34,197,94,0.6)",
-                              transition: "width 0.4s ease, left 0.4s ease",
-                            }} />
-                          )}
-                          <span style={{
-                            position: "absolute", left: `${minPct / 2}%`, top: "50%",
-                            transform: "translate(-50%, -50%)",
-                            fontSize: 10, color: "#ddd", fontFamily: "monospace", fontWeight: 600,
-                            whiteSpace: "nowrap", pointerEvents: "none",
-                          }}>{fmt$(a.minPayment)} min</span>
-                          {a.headroom > 0 && (targetPct - minPct) > 8 && (
-                            <span style={{
-                              position: "absolute", left: `${(minPct + targetPct) / 2}%`, top: "50%",
-                              transform: "translate(-50%, -50%)",
-                              fontSize: 10, color: "#22c55e", fontFamily: "monospace", fontWeight: 700,
-                              whiteSpace: "nowrap", pointerEvents: "none",
-                            }}>+{fmt$(a.headroom)}</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ display: "flex", gap: 20, marginTop: 18, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: 14, height: 8, borderRadius: 2, background: "rgba(255,255,255,0.2)" }} />
-                    <span style={{ fontSize: 10, color: "#555" }}>Min P+I+Escrow</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: 14, height: 8, borderRadius: 2, background: "rgba(34,197,94,0.22)", outline: "1.5px solid rgba(34,197,94,0.5)" }} />
-                    <span style={{ fontSize: 10, color: "#555" }}>Headroom — extra goes to principal</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* Headroom gauge moved above tab bar */}
 
             {amortizations.map(a => (
               <ChartCard
@@ -1636,6 +1798,7 @@ function ComparisonPage({ page, onUpdate }) {
               </table>
             </div>
           )}
+          </div>{/* end padding wrapper */}
         </div>}
       </div>
 
