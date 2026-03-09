@@ -20,6 +20,7 @@ function buildAmortization(strategy) {
     currentLoanMonth = 0,
     armYear1Months = 12,
     armYear2Months = 12,
+    windfalls = [],
   } = strategy;
   const startBalance = loanType === "refi" ? balance + (closingCosts || 0) : balance;
 
@@ -54,15 +55,20 @@ function buildAmortization(strategy) {
     const available = effectivePayment - escrow - interest;
     let principal = Math.max(0, Math.min(available, remaining));
 
-    remaining = Math.max(0, remaining - principal);
+    // Apply any lump-sum windfall for this month
+    const windfall = windfalls.find(w => w.month === month);
+    const windfallAmt = windfall ? Math.min(Math.max(0, windfall.amount || 0), remaining - principal) : 0;
+
+    remaining = Math.max(0, remaining - principal - windfallAmt);
 
     rows.push({
       month,
       balance: remaining,
       interest,
-      principal,
+      principal: principal + windfallAmt,
       totalInterest,
-      payment: principal + interest + escrow,
+      payment: principal + windfallAmt + interest + escrow,
+      windfallAmt,
     });
 
     if (remaining < 0.01) break;
@@ -114,6 +120,7 @@ const DEFAULT_STRATEGIES = [
     currentLoanMonth: 10,
     armYear1Months: 12,
     armYear2Months: 12,
+    windfalls: [],
   },
   {
     id: "refi-30-5k",
@@ -127,6 +134,7 @@ const DEFAULT_STRATEGIES = [
     fixedRate: 0.053,
     fixedTerm: 30,
     closingCosts: 5000,
+    windfalls: [],
   },
   {
     id: "refi-15-min",
@@ -140,6 +148,7 @@ const DEFAULT_STRATEGIES = [
     fixedRate: 0.053,
     fixedTerm: 15,
     closingCosts: 5000,
+    windfalls: [],
   },
 ];
 
@@ -211,8 +220,17 @@ function exportCSV(amort, strategy) {
 // ─── COMPONENTS ─────────────────────────────────────────────────────────────
 
 function StrategyForm({ strategy, onChange, onDelete }) {
+  const [windfallsOpen, setWindfallsOpen] = useState(false);
   const upd = (field, val) => onChange({ ...strategy, [field]: val });
   const updNum = (field, val) => onChange({ ...strategy, [field]: val === "" ? "" : parseFloat(val) || 0 });
+
+  const windfalls = strategy.windfalls || [];
+  const addWindfall = () => onChange({ ...strategy, windfalls: [...windfalls, { month: 12, amount: 10000 }] });
+  const removeWindfall = (i) => onChange({ ...strategy, windfalls: windfalls.filter((_, idx) => idx !== i) });
+  const updWindfall = (i, field, val) => {
+    const updated = windfalls.map((w, idx) => idx === i ? { ...w, [field]: parseFloat(val) || 0 } : w);
+    onChange({ ...strategy, windfalls: updated });
+  };
 
   return (
     <div style={{
@@ -292,6 +310,61 @@ function StrategyForm({ strategy, onChange, onDelete }) {
             <input type="number" min="0" max="24" value={strategy.currentLoanMonth ?? 0} onChange={e => updNum("currentLoanMonth", e.target.value)} style={inputStyle()} />
           </Field>
         </>}
+      </div>
+
+      {/* Windfalls / Lump-Sum Payments */}
+      <div style={{ marginTop: 14 }}>
+        <button
+          onClick={() => setWindfallsOpen(o => !o)}
+          style={{
+            background: "none", border: "none", cursor: "pointer", padding: 0,
+            fontSize: 11, color: windfalls.length > 0 ? "#a855f7" : "#555",
+            fontWeight: 600, letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 5,
+          }}
+        >
+          <span style={{ fontSize: 9 }}>{windfallsOpen ? "▾" : "▸"}</span>
+          LUMP-SUM PAYMENTS {windfalls.length > 0 && <span style={{ color: "#a855f7" }}>({windfalls.length})</span>}
+        </button>
+
+        {windfallsOpen && (
+          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+            {windfalls.length === 0 && (
+              <div style={{ fontSize: 11, color: "#444", fontStyle: "italic" }}>No lump-sum payments. Add one below.</div>
+            )}
+            {windfalls.map((w, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "end" }}>
+                <Field label="Month #">
+                  <input
+                    type="number" min="1" max="480"
+                    value={w.month}
+                    onChange={e => updWindfall(i, "month", e.target.value)}
+                    style={inputStyle()}
+                  />
+                </Field>
+                <Field label="Amount ($)">
+                  <input
+                    type="number" min="0"
+                    value={w.amount}
+                    onChange={e => updWindfall(i, "amount", e.target.value)}
+                    style={inputStyle()}
+                  />
+                </Field>
+                <button
+                  onClick={() => removeWindfall(i)}
+                  style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 16, padding: "6px 4px", alignSelf: "flex-end" }}
+                >×</button>
+              </div>
+            ))}
+            <button
+              onClick={addWindfall}
+              style={{
+                marginTop: 2, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)",
+                borderRadius: 6, color: "#a855f7", fontSize: 11, fontWeight: 600, padding: "5px 10px",
+                cursor: "pointer", alignSelf: "flex-start", letterSpacing: "0.04em",
+              }}
+            >+ Add Payment</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1342,6 +1415,7 @@ function ComparisonPage({ page, onUpdate }) {
       currentLoanMonth: 0,
       armYear1Months: 12,
       armYear2Months: 12,
+      windfalls: [],
     }]);
   };
 
