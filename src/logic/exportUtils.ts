@@ -4,29 +4,33 @@ import { monthToCalendarDate, formatShortDate } from './dateUtils';
 export function scheduleToCSV(
   schedule: AmortizationRow[],
   loanStartMonth: number,
-  loanStartYear: number
+  loanStartYear: number,
+  originalPrincipal: number
 ): string {
   const headers = [
-    'Month', 'Date', 'Annual Rate', 'Standard Pmt', 'Interest',
-    'Principal', 'Extra Principal', 'Escrow', 'Total Payment',
-    'Lender Subsidy', 'Headroom', 'Remaining Balance',
+    'Month', 'Due Date', 'Annual Rate', 'Standard Payment', 'Interest',
+    'Escrow', 'Principal', 'Overpayment', 'Total Principal', 'Total Payment',
+    'Lender Subsidy', 'Headroom', 'Remaining Balance', '% Paid Off',
   ];
 
   const rows = schedule.map(r => {
     const date = formatShortDate(monthToCalendarDate(r.month, loanStartMonth, loanStartYear));
+    const paidOffPct = ((originalPrincipal - r.remainingBalance) / originalPrincipal * 100).toFixed(1) + '%';
     return [
       r.month,
       date,
       (r.annualRate * 100).toFixed(3) + '%',
       r.standardPayment.toFixed(2),
       r.interest.toFixed(2),
+      r.escrow.toFixed(2),
       r.principal.toFixed(2),
       r.extraPrincipal.toFixed(2),
-      r.escrow.toFixed(2),
+      r.totalPrincipalPaid.toFixed(2),
       r.borrowerPayment.toFixed(2),
       r.buydownSubsidy.toFixed(2),
       r.headroom.toFixed(2),
       r.remainingBalance.toFixed(2),
+      paidOffPct,
     ].join(',');
   });
 

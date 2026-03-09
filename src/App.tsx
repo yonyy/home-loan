@@ -142,18 +142,31 @@ const fmtYr = (v) => v == null ? "—" : v.toFixed(1) + " yrs";
 // ─── CSV EXPORT ──────────────────────────────────────────────────────────────
 
 function exportCSV(amort, strategy) {
-  const headers = ["Month", "Year", "Payment", "Principal", "Interest", "Escrow", "Balance", "Cumul. Interest"];
+  const startBalance = amort.rows.length > 0 ? amort.rows[0].balance + amort.rows[0].principal : 1;
+  const headers = [
+    "Month", "Year", "Standard Payment", "Interest", "Escrow",
+    "Principal", "Overpayment", "Total Principal", "Total Payment",
+    "Cumul. Interest", "Remaining Balance", "% Paid Off",
+  ];
   const lines = [headers.join(",")];
+  let cumPrincipal = 0;
   amort.rows.forEach(r => {
+    cumPrincipal += r.principal;
+    const overpayment = Math.max(0, r.payment - amort.minPayment);
+    const paidOffPct = ((startBalance - r.balance) / startBalance * 100).toFixed(1) + "%";
     lines.push([
       r.month,
       Math.ceil(r.month / 12),
-      r.payment.toFixed(2),
-      r.principal.toFixed(2),
+      amort.minPayment.toFixed(2),
       r.interest.toFixed(2),
       strategy.escrow.toFixed(2),
-      r.balance.toFixed(2),
+      r.principal.toFixed(2),
+      overpayment.toFixed(2),
+      cumPrincipal.toFixed(2),
+      r.payment.toFixed(2),
       r.totalInterest.toFixed(2),
+      r.balance.toFixed(2),
+      paidOffPct,
     ].join(","));
   });
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -316,9 +329,23 @@ function ChartCard({ title, children, dimmed = false }) {
 // ─── SCHEDULE MODAL ──────────────────────────────────────────────────────────
 
 function ScheduleModal({ amort, strategy, onClose }) {
+  const [advanced, setAdvanced] = useState(false);
+  const startBalance = amort.rows.length > 0 ? amort.rows[0].balance + amort.rows[0].principal : 1;
+
+  // Pre-compute cumulative principal for each row
+  let runningPrincipal = 0;
+  const enrichedRows = amort.rows.map(r => {
+    runningPrincipal += r.principal;
+    return { ...r, totalPrincipal: runningPrincipal };
+  });
+
+  const simpleColCount = 5;
+  const advancedColCount = 12;
+  const colCount = advanced ? advancedColCount : simpleColCount;
+
   const tableRows = [];
   let prevYear = 0;
-  amort.rows.forEach((r, i) => {
+  enrichedRows.forEach((r, i) => {
     const yr = Math.ceil(r.month / 12);
     if (yr !== prevYear) {
       tableRows.push({ type: "year", year: yr, key: `yr-${yr}` });
@@ -372,6 +399,19 @@ function ScheduleModal({ amort, strategy, onClose }) {
             Total Interest: <strong style={{ color: "#e8e8e8" }}>{fmt$(amort.totalInterest)}</strong>
           </span>
           <button
+            onClick={() => setAdvanced(v => !v)}
+            style={{
+              background: advanced ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.05)",
+              border: `1px solid ${advanced ? "rgba(59,130,246,0.4)" : "rgba(255,255,255,0.1)"}`,
+              color: advanced ? "#3b82f6" : "#555",
+              borderRadius: 6,
+              padding: "5px 11px",
+              fontSize: 11,
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >{advanced ? "Simple View" : "Advanced View"}</button>
+          <button
             onClick={() => exportCSV(amort, strategy)}
             style={{
               background: "rgba(34,197,94,0.1)",
@@ -395,7 +435,10 @@ function ScheduleModal({ amort, strategy, onClose }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                {["Mo", "Yr", "Payment", "Principal", "Interest", "Escrow", "Balance", "Cumul. Interest"].map(h => (
+                {(advanced
+                  ? ["Mo", "Yr", "Standard Payment", "Interest", "Escrow", "Principal", "Overpayment", "Total Principal", "Total Payment", "Cumul. Interest", "Remaining Balance", "% Paid Off"]
+                  : ["Month", "Standard Payment", "Interest", "Principal", "Remaining Balance"]
+                ).map(h => (
                   <th key={h} style={{
                     padding: "8px 14px",
                     textAlign: "right",
@@ -418,7 +461,7 @@ function ScheduleModal({ amort, strategy, onClose }) {
                 if (item.type === "year") {
                   return (
                     <tr key={item.key}>
-                      <td colSpan={8} style={{
+                      <td colSpan={colCount} style={{
                         padding: "6px 14px 3px",
                         fontSize: 9,
                         color: "#333",
@@ -433,16 +476,22 @@ function ScheduleModal({ amort, strategy, onClose }) {
                   );
                 }
                 const { r, i } = item;
+                const overpayment = Math.max(0, r.payment - amort.minPayment);
+                const paidOffPct = ((startBalance - r.balance) / startBalance * 100).toFixed(1) + "%";
                 return (
                   <tr key={item.key} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)" }}>
                     <td style={{ padding: "5px 14px", textAlign: "right", color: "#555", fontFamily: "monospace" }}>{r.month}</td>
-                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#3a3a3a", fontFamily: "monospace" }}>{Math.ceil(r.month / 12)}</td>
-                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#bbb", fontFamily: "monospace" }}>{fmt$(r.payment)}</td>
-                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#22c55e", fontFamily: "monospace" }}>{fmt$(r.principal)}</td>
+                    {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: "#3a3a3a", fontFamily: "monospace" }}>{Math.ceil(r.month / 12)}</td>}
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#888", fontFamily: "monospace" }}>{fmt$(amort.minPayment)}</td>
                     <td style={{ padding: "5px 14px", textAlign: "right", color: "#f97316", fontFamily: "monospace" }}>{fmt$(r.interest)}</td>
-                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#666", fontFamily: "monospace" }}>{fmt$(strategy.escrow)}</td>
+                    {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: "#666", fontFamily: "monospace" }}>{fmt$(strategy.escrow)}</td>}
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#22c55e", fontFamily: "monospace" }}>{fmt$(r.principal)}</td>
+                    {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: overpayment > 0 ? "#3b82f6" : "#3a3a3a", fontFamily: "monospace" }}>{overpayment > 0 ? fmt$(overpayment) : "—"}</td>}
+                    {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: "#bbb", fontFamily: "monospace" }}>{fmt$(r.totalPrincipal)}</td>}
+                    {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: "#bbb", fontFamily: "monospace" }}>{fmt$(r.payment)}</td>}
+                    {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: "#555", fontFamily: "monospace" }}>{fmt$(r.totalInterest)}</td>}
                     <td style={{ padding: "5px 14px", textAlign: "right", color: "#e8e8e8", fontFamily: "monospace", fontWeight: 600 }}>{fmt$(r.balance)}</td>
-                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#555", fontFamily: "monospace" }}>{fmt$(r.totalInterest)}</td>
+                    {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: "#555", fontFamily: "monospace" }}>{paidOffPct}</td>}
                   </tr>
                 );
               })}

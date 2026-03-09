@@ -26,23 +26,44 @@ function getArmYear(month: number, year1Duration: number, year2Duration: number)
 
 function AmortTable({ scenario, inputs }: { scenario: ScenarioResult; inputs: LoanInputs }) {
   const { year1DurationMonths, year2DurationMonths } = inputs.armRates;
+  const [advanced, setAdvanced] = useState(false);
+  const hasBuydown = scenario.totalBuydownSubsidy > 0;
 
   return (
     <div className="amort-table-wrapper">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 4px' }}>
+        <button
+          onClick={() => setAdvanced(v => !v)}
+          style={{
+            padding: '4px 12px',
+            fontSize: 12,
+            background: 'transparent',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)',
+            color: advanced ? 'var(--color-accent-blue)' : 'var(--color-text-muted)',
+            cursor: 'pointer',
+          }}
+        >
+          {advanced ? 'Simple View' : 'Advanced View'}
+        </button>
+      </div>
       <table className="amort-table">
         <thead>
           <tr>
-            <th>Month</th>
-            <th>Date</th>
-            <th>Rate</th>
-            <th>Std Pmt</th>
+            {advanced && <th>Month</th>}
+            <th>Due Date</th>
+            {advanced && <th>Rate</th>}
+            <th>Standard Payment</th>
             <th>Interest</th>
+            {advanced && <th>Escrow</th>}
             <th>Principal</th>
-            <th>Extra</th>
-            <th>Total Pmt</th>
-            {scenario.totalBuydownSubsidy > 0 && <th>Subsidy</th>}
-            <th>Headroom</th>
-            <th>Balance</th>
+            {advanced && <th>Overpayment</th>}
+            {advanced && <th>Total Principal</th>}
+            {advanced && <th>Total Payment</th>}
+            {advanced && hasBuydown && <th>Subsidy</th>}
+            {advanced && <th>Headroom</th>}
+            <th>Remaining Balance</th>
+            {advanced && <th>% Paid Off</th>}
           </tr>
         </thead>
         <tbody>
@@ -50,28 +71,36 @@ function AmortTable({ scenario, inputs }: { scenario: ScenarioResult; inputs: Lo
             const armYear = getArmYear(row.month, year1DurationMonths, year2DurationMonths);
             const yearClass = `year${armYear}`;
             const date = monthToCalendarDate(row.month, inputs.loanStartMonth, inputs.loanStartYear);
+            const paidOffPct = ((inputs.originalPrincipal - row.remainingBalance) / inputs.originalPrincipal * 100).toFixed(1) + '%';
 
             return (
               <tr key={row.month} className={row.isQuarterlyPaymentMonth ? 'quarterly-row' : ''}>
-                <td className={yearClass}>{row.month}</td>
+                {advanced && <td className={yearClass}>{row.month}</td>}
                 <td style={{ color: 'var(--color-text-muted)' }}>{formatShortDate(date)}</td>
-                <td className={yearClass}>{formatRate(row.annualRate)}</td>
+                {advanced && <td className={yearClass}>{formatRate(row.annualRate)}</td>}
                 <td style={{ color: 'var(--color-text-dim)' }}>{formatCurrency(row.standardPayment)}</td>
                 <td>{formatCurrency(row.interest)}</td>
+                {advanced && <td style={{ color: 'var(--color-text-dim)' }}>{formatCurrency(row.escrow)}</td>}
                 <td>{formatCurrency(row.principal)}</td>
-                <td style={{ color: row.extraPrincipal > 0 ? 'var(--color-accent-blue)' : 'var(--color-text-dim)' }}>
-                  {row.extraPrincipal > 0 ? formatCurrency(row.extraPrincipal) : '—'}
-                </td>
-                <td>{formatCurrency(row.borrowerPayment)}</td>
-                {scenario.totalBuydownSubsidy > 0 && (
+                {advanced && (
+                  <td style={{ color: row.extraPrincipal > 0 ? 'var(--color-accent-blue)' : 'var(--color-text-dim)' }}>
+                    {row.extraPrincipal > 0 ? formatCurrency(row.extraPrincipal) : '—'}
+                  </td>
+                )}
+                {advanced && <td>{formatCurrency(row.totalPrincipalPaid)}</td>}
+                {advanced && <td>{formatCurrency(row.borrowerPayment)}</td>}
+                {advanced && hasBuydown && (
                   <td style={{ color: 'var(--color-accent-green)' }}>
                     {row.buydownSubsidy > 0 ? formatCurrency(row.buydownSubsidy) : '—'}
                   </td>
                 )}
-                <td className={row.headroom < 0 ? 'negative' : row.headroom > 500 ? 'positive' : ''}>
-                  {formatCurrency(row.headroom)}
-                </td>
+                {advanced && (
+                  <td className={row.headroom < 0 ? 'negative' : row.headroom > 500 ? 'positive' : ''}>
+                    {formatCurrency(row.headroom)}
+                  </td>
+                )}
                 <td>{formatCurrency(row.remainingBalance)}</td>
+                {advanced && <td style={{ color: 'var(--color-text-muted)' }}>{paidOffPct}</td>}
               </tr>
             );
           })}

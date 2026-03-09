@@ -11,7 +11,7 @@ export function ExportButton({ scenario, inputs }: Props) {
   const [copied, setCopied] = useState(false);
 
   const handleCSV = () => {
-    const csv = scheduleToCSV(scenario.schedule, inputs.loanStartMonth, inputs.loanStartYear);
+    const csv = scheduleToCSV(scenario.schedule, inputs.loanStartMonth, inputs.loanStartYear, inputs.originalPrincipal);
     const safeName = scenario.label.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     downloadCSV(`${safeName}_schedule.csv`, csv);
   };
