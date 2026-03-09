@@ -48,14 +48,12 @@ function buildAmortization(strategy) {
   // otherwise compute from startBalance + period rate.
   function getStdPayment(simMonth) {
     if (loanType !== "arm") return calcFixedPI(startBalance, fixedRate, fixedTerm) + escrow;
-    if (standardPayments) {
-      if (simMonth <= simYear1End) return standardPayments[0];
-      if (simMonth <= simYear2End) return standardPayments[1];
-      return standardPayments[2];
-    }
-    if (simMonth <= simYear1End) return calcFixedPI(startBalance, armRates[0], 30) + escrow;
-    if (simMonth <= simYear2End) return calcFixedPI(startBalance, armRates[1], 30) + escrow;
-    return calcFixedPI(startBalance, armRates[2], 30) + escrow;
+    const idx = simMonth <= simYear1End ? 0 : simMonth <= simYear2End ? 1 : 2;
+    const locked = standardPayments?.[idx];
+    if (locked != null) return locked;
+    // Fallback: approximate from current balance + period rate
+    const rate = [armRates[0], armRates[1], armRates[2]][idx];
+    return calcFixedPI(startBalance, rate, 30) + escrow;
   }
 
   while (remaining > 0.01 && month <= 480) {
@@ -330,6 +328,39 @@ function StrategyForm({ strategy, onChange, onDelete }) {
           </Field>
           <Field label="Months elapsed in ARM">
             <input type="number" min="0" max="24" value={strategy.currentLoanMonth ?? 0} onChange={e => updNum("currentLoanMonth", e.target.value)} style={inputStyle()} />
+          </Field>
+          <Field label="Yr 1 Min Payment ($/mo)">
+            <input type="number" step="0.01"
+              value={(strategy.standardPayments?.[0] ?? "").toString()}
+              onChange={e => upd("standardPayments", [
+                e.target.value === "" ? null : parseFloat(e.target.value),
+                strategy.standardPayments?.[1] ?? null,
+                strategy.standardPayments?.[2] ?? null,
+              ])}
+              placeholder="from loan statement"
+              style={inputStyle()} />
+          </Field>
+          <Field label="Yr 2 Min Payment ($/mo)">
+            <input type="number" step="0.01"
+              value={(strategy.standardPayments?.[1] ?? "").toString()}
+              onChange={e => upd("standardPayments", [
+                strategy.standardPayments?.[0] ?? null,
+                e.target.value === "" ? null : parseFloat(e.target.value),
+                strategy.standardPayments?.[2] ?? null,
+              ])}
+              placeholder="from loan statement"
+              style={inputStyle()} />
+          </Field>
+          <Field label="Yr 3+ Min Payment ($/mo)">
+            <input type="number" step="0.01"
+              value={(strategy.standardPayments?.[2] ?? "").toString()}
+              onChange={e => upd("standardPayments", [
+                strategy.standardPayments?.[0] ?? null,
+                strategy.standardPayments?.[1] ?? null,
+                e.target.value === "" ? null : parseFloat(e.target.value),
+              ])}
+              placeholder="from loan statement"
+              style={inputStyle()} />
           </Field>
         </>}
       </div>
