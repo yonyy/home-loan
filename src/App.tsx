@@ -3,6 +3,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot, Label } from "recharts";
 import { ARMCliffBanner } from "./components/ARMCliffBanner";
 import { computeWinners, generateTradeoff } from "./logic/tradeoffUtils";
+import { projectInvestment } from "./logic/MortgageEngine";
 
 // ─── MORTGAGE ENGINE ────────────────────────────────────────────────────────
 
@@ -1272,6 +1273,7 @@ function ComparisonPage({ page, onUpdate }) {
   const [scheduleStratId, setScheduleStratId] = useState(null);
   const [activeTab, setActiveTab] = useState("charts");
   const [strategies, setStrategies] = useState(page.strategies);
+  const [annualReturn, setAnnualReturn] = useState(0.07);
   const balanceChartRef = useRef(null);
 
   useEffect(() => {
@@ -1488,16 +1490,40 @@ function ComparisonPage({ page, onUpdate }) {
 
           <div style={{ flex: 1, padding: "24px 28px" }}>
           {/* Summary cards */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 10, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em" }}>Strategy Comparison</span>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#666" }}>
+              <span>Invest after payoff @</span>
+              <input
+                type="number"
+                min={0} max={30} step={0.5}
+                value={(annualReturn * 100).toFixed(1)}
+                onChange={e => setAnnualReturn(Math.min(0.30, Math.max(0, parseFloat(e.target.value) / 100 || 0)))}
+                onClick={e => e.stopPropagation()}
+                style={{
+                  width: 46, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 4, color: "#ccc", fontSize: 11, padding: "2px 5px", textAlign: "center",
+                  fontFamily: "monospace",
+                }}
+              />
+              <span style={{ color: "#555" }}>% / yr</span>
+            </label>
+          </div>
           <div style={{
             display: "grid",
             gridTemplateColumns: `repeat(${Math.min(Math.max(strategies.length, 1), 3)}, 1fr)`,
             gap: 12,
             marginBottom: 28,
           }}>
-            {amortizations.map(a => {
+            {amortizations.map((a, i) => {
               const isFocused = focusedId === a.id;
               const isDimmed = focusedId && !isFocused;
               const tradeoff = generateTradeoff(a, amortizations, winners);
+              const freeCashMonths = Math.max(0, maxMonths - a.monthsToPayoff);
+              const monthlyContrib = strategies[i]?.targetPayment ?? a.minPayment;
+              const projectedValue = freeCashMonths > 0
+                ? projectInvestment(monthlyContrib, freeCashMonths, annualReturn)
+                : 0;
               const badgeStyle = (bg, border, color) => ({
                 display: "inline-block",
                 padding: "2px 7px",
@@ -1577,6 +1603,41 @@ function ComparisonPage({ page, onUpdate }) {
                   }}>
                     {tradeoff}
                   </div>
+
+                  {/* Investment projection callout */}
+                  {freeCashMonths > 0 ? (
+                    <div style={{
+                      marginBottom: 8,
+                      padding: "8px 10px",
+                      borderRadius: 7,
+                      background: "rgba(34,197,94,0.06)",
+                      border: "1px solid rgba(34,197,94,0.15)",
+                    }}>
+                      <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>
+                        Invest after payoff · {Math.round(freeCashMonths / 12 * 10) / 10} yrs
+                      </div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: "#22c55e", fontFamily: "monospace" }}>
+                          {projectedValue >= 1e6
+                            ? "$" + (projectedValue / 1e6).toFixed(2) + "M"
+                            : "$" + Math.round(projectedValue / 1000) + "k"}
+                        </span>
+                        <span style={{ fontSize: 10, color: "#555" }}>
+                          investing {fmt$(monthlyContrib)}/mo
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      marginBottom: 8, padding: "8px 10px", borderRadius: 7,
+                      background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
+                    }}>
+                      <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>
+                        Invest after payoff
+                      </div>
+                      <div style={{ fontSize: 11, color: "#444" }}>Longest payoff — set the horizon</div>
+                    </div>
+                  )}
 
                   {/* Schedule button */}
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
