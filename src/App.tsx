@@ -28,7 +28,7 @@ function buildAmortization(strategy) {
   // For fixed/refi: single minPI computed from startBalance
   // For ARM: we'll compute per-period below; use year1 rate here only for effectivePayment fallback
   const minPI = loanType === "arm"
-    ? calcFixedPI(startBalance, armRates?.[0] || 0.04375, 30)
+    ? calcFixedPI(startBalance, armRates?.[0] ?? 0, 30)
     : calcFixedPI(startBalance, fixedRate, fixedTerm);
   const effectivePayment = targetPayment != null ? targetPayment : minPI + escrow;
 
@@ -1431,10 +1431,10 @@ function ComparisonPage({ page, onUpdate }) {
       balance: 567992.60,
       escrow: 856.43,
       targetPayment: 5000,
-      armRates: [0.04375, 0.05375, 0.06375],
-      fixedRate: 0.053,
+      armRates: [0, 0, 0],
+      fixedRate: 0,
       fixedTerm: 30,
-      closingCosts: 5000,
+      closingCosts: 0,
       currentLoanMonth: 0,
       armYear1Months: 12,
       armYear2Months: 12,
