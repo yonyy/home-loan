@@ -21,11 +21,14 @@ function buildAmortization(strategy) {
     armYear1Months = 12,
     armYear2Months = 12,
     windfalls = [],
+    standardPayments,  // optional [yr1Total, yr2Total, yr3+Total] including escrow
   } = strategy;
   const startBalance = loanType === "refi" ? balance + (closingCosts || 0) : balance;
 
+  // For fixed/refi: single minPI computed from startBalance
+  // For ARM: we'll compute per-period below; use year1 rate here only for effectivePayment fallback
   const minPI = loanType === "arm"
-    ? calcFixedPI(startBalance, armRates?.[2] || armRates?.[0] || 0.04375, 30)
+    ? calcFixedPI(startBalance, armRates?.[0] || 0.04375, 30)
     : calcFixedPI(startBalance, fixedRate, fixedTerm);
   const effectivePayment = targetPayment != null ? targetPayment : minPI + escrow;
 
@@ -39,6 +42,21 @@ function buildAmortization(strategy) {
   // so the boundaries shift accordingly.
   const simYear1End = Math.max(0, armYear1Months - currentLoanMonth);
   const simYear2End = simYear1End + armYear2Months;
+
+  // Pre-compute per-period standard payments (min payment the borrower owes each period).
+  // For ARM: use caller-supplied standardPayments if provided (locked in at origination),
+  // otherwise compute from startBalance + period rate.
+  function getStdPayment(simMonth) {
+    if (loanType !== "arm") return calcFixedPI(startBalance, fixedRate, fixedTerm) + escrow;
+    if (standardPayments) {
+      if (simMonth <= simYear1End) return standardPayments[0];
+      if (simMonth <= simYear2End) return standardPayments[1];
+      return standardPayments[2];
+    }
+    if (simMonth <= simYear1End) return calcFixedPI(startBalance, armRates[0], 30) + escrow;
+    if (simMonth <= simYear2End) return calcFixedPI(startBalance, armRates[1], 30) + escrow;
+    return calcFixedPI(startBalance, armRates[2], 30) + escrow;
+  }
 
   while (remaining > 0.01 && month <= 480) {
     let rate;
@@ -69,15 +87,16 @@ function buildAmortization(strategy) {
       totalInterest,
       payment: principal + windfallAmt + interest + escrow,
       windfallAmt,
+      payment: principal + interest + escrow,
+      standardPayment: getStdPayment(month),
     });
 
     if (remaining < 0.01) break;
     month++;
   }
 
-  const minPayment = loanType === "arm"
-    ? calcFixedPI(startBalance, (armRates?.[2] || armRates?.[0] || 0.04375), 30) + escrow
-    : calcFixedPI(startBalance, fixedRate, fixedTerm) + escrow;
+  // minPayment = current period's standard payment (for summary cards / headroom gauge)
+  const minPayment = getStdPayment(1);
 
   // ARM countdown: months from now until each rate step-up.
   // simYear1End is already 0 if we're already past year-1.
@@ -121,6 +140,8 @@ const DEFAULT_STRATEGIES = [
     armYear1Months: 12,
     armYear2Months: 12,
     windfalls: [],
+    // Standard payments locked in at origination (total including escrow, from real loan statements)
+    standardPayments: [4037.48, 4424.12, 4831.23],
   },
   {
     id: "refi-30-5k",
@@ -189,12 +210,13 @@ function exportCSV(amort, strategy) {
   let cumPrincipal = 0;
   amort.rows.forEach(r => {
     cumPrincipal += r.principal;
-    const overpayment = Math.max(0, r.payment - amort.minPayment);
+    const rowStdPayment = r.standardPayment ?? amort.minPayment;
+    const overpayment = Math.max(0, r.payment - rowStdPayment);
     const paidOffPct = ((startBalance - r.balance) / startBalance * 100).toFixed(1) + "%";
     lines.push([
       r.month,
       Math.ceil(r.month / 12),
-      amort.minPayment.toFixed(2),
+      rowStdPayment.toFixed(2),
       r.interest.toFixed(2),
       strategy.escrow.toFixed(2),
       r.principal.toFixed(2),
@@ -580,13 +602,14 @@ function ScheduleModal({ amort, strategy, onClose }) {
                   );
                 }
                 const { r, i } = item;
-                const overpayment = Math.max(0, r.payment - amort.minPayment);
+                const rowStdPayment = r.standardPayment ?? amort.minPayment;
+                const overpayment = Math.max(0, r.payment - rowStdPayment);
                 const paidOffPct = ((startBalance - r.balance) / startBalance * 100).toFixed(1) + "%";
                 return (
                   <tr key={item.key} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)" }}>
                     <td style={{ padding: "5px 14px", textAlign: "right", color: "#555", fontFamily: "monospace" }}>{r.month}</td>
                     {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: "#3a3a3a", fontFamily: "monospace" }}>{Math.ceil(r.month / 12)}</td>}
-                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#888", fontFamily: "monospace" }}>{fmt$(amort.minPayment)}</td>
+                    <td style={{ padding: "5px 14px", textAlign: "right", color: "#888", fontFamily: "monospace" }}>{fmt$(rowStdPayment)}</td>
                     <td style={{ padding: "5px 14px", textAlign: "right", color: "#f97316", fontFamily: "monospace" }}>{fmt$(r.interest)}</td>
                     {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: "#666", fontFamily: "monospace" }}>{fmt$(strategy.escrow)}</td>}
                     <td style={{ padding: "5px 14px", textAlign: "right", color: "#22c55e", fontFamily: "monospace" }}>{fmt$(r.principal)}</td>
