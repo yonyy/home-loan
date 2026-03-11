@@ -27,8 +27,8 @@ function buildAmortization(strategy) {
 
   // For fixed/refi: single minPI computed from startBalance
   // For ARM: we'll compute per-period below; use year1 rate here only for effectivePayment fallback
-  const minPI = loanType === "arm"
-    ? calcFixedPI(startBalance, armRates?.[0] ?? 0, 30)
+  const minPI = loanType === "arm" || loanType === "buydown"
+    ? calcFixedPI(startBalance, armRates?.[0] ?? 0, fixedTerm || 30)
     : calcFixedPI(startBalance, fixedRate, fixedTerm);
   const effectivePayment = targetPayment != null ? targetPayment : minPI + escrow;
 
@@ -47,6 +47,13 @@ function buildAmortization(strategy) {
   // For ARM: use caller-supplied standardPayments if provided (locked in at origination),
   // otherwise compute from startBalance + period rate.
   function getStdPayment(simMonth) {
+    if (loanType === "buydown") {
+      // Std payment for buydown = borrower's reduced PI in each period
+      const rate = simMonth <= simYear1End ? armRates[0]
+                 : simMonth <= simYear2End ? armRates[1]
+                 : armRates[2];
+      return calcFixedPI(startBalance, rate, fixedTerm || 30) + escrow;
+    }
     if (loanType !== "arm") return calcFixedPI(startBalance, fixedRate, fixedTerm) + escrow;
     const idx = simMonth <= simYear1End ? 0 : simMonth <= simYear2End ? 1 : 2;
     const locked = standardPayments?.[idx];
@@ -58,7 +65,22 @@ function buildAmortization(strategy) {
 
   while (remaining > 0.01 && month <= 480) {
     let rate;
-    if (loanType === "arm") {
+    let buydownSubsidy = 0;
+
+    if (loanType === "buydown") {
+      // 2-1 Buydown: interest ALWAYS accrues at the note rate (armRates[2]).
+      // Borrower pays a reduced PI in years 1 & 2; the lender covers the gap (subsidy).
+      // Principal reduction follows the note-rate amortization schedule.
+      const noteRate = armRates[2];
+      rate = noteRate / 12;
+
+      const borrowerRate = month <= simYear1End ? armRates[0]
+                         : month <= simYear2End ? armRates[1]
+                         : noteRate;
+      const notePI    = calcFixedPI(startBalance, noteRate,     fixedTerm || 30);
+      const borrowerPI = calcFixedPI(startBalance, borrowerRate, fixedTerm || 30);
+      buydownSubsidy = Math.max(0, notePI - borrowerPI);
+    } else if (loanType === "arm") {
       if (month <= simYear1End) rate = armRates[0] / 12;
       else if (month <= simYear2End) rate = armRates[1] / 12;
       else rate = armRates[2] / 12;
@@ -68,8 +90,19 @@ function buildAmortization(strategy) {
 
     const interest = remaining * rate;
     totalInterest += interest;
-    const available = effectivePayment - escrow - interest;
-    let principal = Math.max(0, Math.min(available, remaining));
+
+    let principal;
+    if (loanType === "buydown") {
+      // Balance amortizes on note-rate schedule; extra from targetPayment accelerates payoff
+      const notePI = calcFixedPI(startBalance, armRates[2], fixedTerm || 30);
+      const stdPmt  = getStdPayment(month);
+      const basePrincipal = Math.max(0, notePI - interest);
+      const extra   = Math.max(0, (targetPayment ?? stdPmt) - stdPmt);
+      principal = Math.max(0, Math.min(basePrincipal + extra, remaining));
+    } else {
+      const available = effectivePayment - escrow - interest;
+      principal = Math.max(0, Math.min(available, remaining));
+    }
 
     // Apply any lump-sum windfall for this month
     const windfall = windfalls.find(w => w.month === month);
@@ -83,10 +116,10 @@ function buildAmortization(strategy) {
       interest,
       principal: principal + windfallAmt,
       totalInterest,
-      payment: principal + windfallAmt + interest + escrow,
-      windfallAmt,
       payment: principal + interest + escrow,
+      windfallAmt,
       standardPayment: getStdPayment(month),
+      buydownSubsidy,
     });
 
     if (remaining < 0.01) break;
@@ -98,7 +131,7 @@ function buildAmortization(strategy) {
 
   // ARM countdown: months from now until each rate step-up.
   // simYear1End is already 0 if we're already past year-1.
-  const armCountdown = loanType === "arm" ? {
+  const armCountdown = (loanType === "arm" || loanType === "buydown") ? {
     monthsToYear2: simYear1End,
     monthsToYear3: simYear2End,
     year1Rate: armRates[0],
@@ -126,7 +159,7 @@ const DEFAULT_STRATEGIES = [
     id: "arm-5k",
     name: "2-1 Buydown — Stay & Pay $5k",
     color: "#f97316",
-    loanType: "arm",
+    loanType: "buydown",
     balance: 567992.60,
     escrow: 856.43,
     targetPayment: 5000,
@@ -291,7 +324,8 @@ function StrategyForm({ strategy, onChange, onDelete }) {
         </Field>
         <Field label="Loan Type">
           <select value={strategy.loanType} onChange={e => upd("loanType", e.target.value)} style={inputStyle()}>
-            <option value="arm">2-1 Buydown</option>
+            <option value="buydown">2-1 Buydown</option>
+            <option value="arm">ARM (Variable)</option>
             <option value="fixed">Fixed (New)</option>
             <option value="refi">Refi (Fixed)</option>
           </select>
@@ -316,52 +350,64 @@ function StrategyForm({ strategy, onChange, onDelete }) {
             <input type="number" value={strategy.closingCosts} onChange={e => updNum("closingCosts", e.target.value)} style={inputStyle()} />
           </Field>
         )}
-        {strategy.loanType === "arm" && <>
+        {(strategy.loanType === "arm" || strategy.loanType === "buydown") && <>
           <Field label="Yr 1 Rate (%)">
             <input type="number" step="0.01" value={(strategy.armRates[0] * 100).toFixed(3)} onChange={e => upd("armRates", [parseFloat(e.target.value) / 100, strategy.armRates[1], strategy.armRates[2]])} style={inputStyle()} />
           </Field>
           <Field label="Yr 2 Rate (%)">
             <input type="number" step="0.01" value={(strategy.armRates[1] * 100).toFixed(3)} onChange={e => upd("armRates", [strategy.armRates[0], parseFloat(e.target.value) / 100, strategy.armRates[2]])} style={inputStyle()} />
           </Field>
-          <Field label="Yr 3+ Rate (%)">
+          <Field label={strategy.loanType === "buydown" ? "Note Rate (%)" : "Yr 3+ Rate (%)"}>
             <input type="number" step="0.01" value={(strategy.armRates[2] * 100).toFixed(3)} onChange={e => upd("armRates", [strategy.armRates[0], strategy.armRates[1], parseFloat(e.target.value) / 100])} style={inputStyle()} />
           </Field>
+          {strategy.loanType === "buydown" && (
+            <Field label="Term (years)">
+              <select value={strategy.fixedTerm || 30} onChange={e => upd("fixedTerm", parseInt(e.target.value))} style={inputStyle()}>
+                <option value={15}>15</option>
+                <option value={20}>20</option>
+                <option value={25}>25</option>
+                <option value={30}>30</option>
+              </select>
+            </Field>
+          )}
           <Field label="Months elapsed in ARM">
             <input type="number" min="0" max="24" value={strategy.currentLoanMonth ?? 0} onChange={e => updNum("currentLoanMonth", e.target.value)} style={inputStyle()} />
           </Field>
-          <Field label="Yr 1 Min Payment ($/mo)">
-            <input type="number" step="0.01"
-              value={(strategy.standardPayments?.[0] ?? "").toString()}
-              onChange={e => upd("standardPayments", [
-                e.target.value === "" ? null : parseFloat(e.target.value),
-                strategy.standardPayments?.[1] ?? null,
-                strategy.standardPayments?.[2] ?? null,
-              ])}
-              placeholder="from loan statement"
-              style={inputStyle()} />
-          </Field>
-          <Field label="Yr 2 Min Payment ($/mo)">
-            <input type="number" step="0.01"
-              value={(strategy.standardPayments?.[1] ?? "").toString()}
-              onChange={e => upd("standardPayments", [
-                strategy.standardPayments?.[0] ?? null,
-                e.target.value === "" ? null : parseFloat(e.target.value),
-                strategy.standardPayments?.[2] ?? null,
-              ])}
-              placeholder="from loan statement"
-              style={inputStyle()} />
-          </Field>
-          <Field label="Yr 3+ Min Payment ($/mo)">
-            <input type="number" step="0.01"
-              value={(strategy.standardPayments?.[2] ?? "").toString()}
-              onChange={e => upd("standardPayments", [
-                strategy.standardPayments?.[0] ?? null,
-                strategy.standardPayments?.[1] ?? null,
-                e.target.value === "" ? null : parseFloat(e.target.value),
-              ])}
-              placeholder="from loan statement"
-              style={inputStyle()} />
-          </Field>
+          {strategy.loanType === "arm" && <>
+            <Field label="Yr 1 Min Payment ($/mo)">
+              <input type="number" step="0.01"
+                value={(strategy.standardPayments?.[0] ?? "").toString()}
+                onChange={e => upd("standardPayments", [
+                  e.target.value === "" ? null : parseFloat(e.target.value),
+                  strategy.standardPayments?.[1] ?? null,
+                  strategy.standardPayments?.[2] ?? null,
+                ])}
+                placeholder="from loan statement"
+                style={inputStyle()} />
+            </Field>
+            <Field label="Yr 2 Min Payment ($/mo)">
+              <input type="number" step="0.01"
+                value={(strategy.standardPayments?.[1] ?? "").toString()}
+                onChange={e => upd("standardPayments", [
+                  strategy.standardPayments?.[0] ?? null,
+                  e.target.value === "" ? null : parseFloat(e.target.value),
+                  strategy.standardPayments?.[2] ?? null,
+                ])}
+                placeholder="from loan statement"
+                style={inputStyle()} />
+            </Field>
+            <Field label="Yr 3+ Min Payment ($/mo)">
+              <input type="number" step="0.01"
+                value={(strategy.standardPayments?.[2] ?? "").toString()}
+                onChange={e => upd("standardPayments", [
+                  strategy.standardPayments?.[0] ?? null,
+                  strategy.standardPayments?.[1] ?? null,
+                  e.target.value === "" ? null : parseFloat(e.target.value),
+                ])}
+                placeholder="from loan statement"
+                style={inputStyle()} />
+            </Field>
+          </>}
         </>}
       </div>
 
@@ -496,8 +542,9 @@ function ScheduleModal({ amort, strategy, onClose }) {
     return { ...r, totalPrincipal: runningPrincipal };
   });
 
+  const hasBuydownSubsidy = strategy.loanType === "buydown";
   const simpleColCount = 5;
-  const advancedColCount = 12;
+  const advancedColCount = 12 + 1 + (hasBuydownSubsidy ? 1 : 0); // +1 Windfall, +1 Subsidy for buydown
   const colCount = advanced ? advancedColCount : simpleColCount;
 
   const tableRows = [];
@@ -593,7 +640,7 @@ function ScheduleModal({ amort, strategy, onClose }) {
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                 {(advanced
-                  ? ["Mo", "Yr", "Standard Payment", "Interest", "Escrow", "Principal", "Overpayment", "Total Principal", "Total Payment", "Cumul. Interest", "Remaining Balance", "% Paid Off"]
+                  ? ["Mo", "Yr", "Standard Payment", "Interest", "Escrow", "Principal", "Overpayment", "Total Principal", "Total Payment", "Cumul. Interest", "Remaining Balance", "% Paid Off", "Windfall", ...(hasBuydownSubsidy ? ["Lender Subsidy"] : [])]
                   : ["Month", "Standard Payment", "Interest", "Principal", "Remaining Balance"]
                 ).map(h => (
                   <th key={h} style={{
@@ -650,6 +697,8 @@ function ScheduleModal({ amort, strategy, onClose }) {
                     {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: "#555", fontFamily: "monospace" }}>{fmt$(r.totalInterest)}</td>}
                     <td style={{ padding: "5px 14px", textAlign: "right", color: "#e8e8e8", fontFamily: "monospace", fontWeight: 600 }}>{fmt$(r.balance)}</td>
                     {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: "#555", fontFamily: "monospace" }}>{paidOffPct}</td>}
+                    {advanced && <td style={{ padding: "5px 14px", textAlign: "right", color: r.windfallAmt > 0 ? "#a855f7" : "#3a3a3a", fontFamily: "monospace", fontWeight: r.windfallAmt > 0 ? 600 : 400 }}>{r.windfallAmt > 0 ? fmt$(r.windfallAmt) : "—"}</td>}
+                    {advanced && hasBuydownSubsidy && <td style={{ padding: "5px 14px", textAlign: "right", color: r.buydownSubsidy > 0 ? "#f97316" : "#3a3a3a", fontFamily: "monospace" }}>{r.buydownSubsidy > 0 ? fmt$(r.buydownSubsidy) : "—"}</td>}
                   </tr>
                 );
               })}
@@ -1869,6 +1918,21 @@ function ComparisonPage({ page, onUpdate }) {
                       <ReferenceLine x={24} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
                     </>
                   )}
+                  {/* Windfall payment markers — vertical line per unique lump-sum month */}
+                  {[...new Set(strategies.flatMap(s => (s.windfalls || []).map(w => w.month)))]
+                    .sort((a, b) => a - b)
+                    .map(m => {
+                      const total = strategies.reduce((sum, s) => {
+                        const wf = (s.windfalls || []).find(w => w.month === m);
+                        return sum + (wf ? (wf.amount || 0) : 0);
+                      }, 0);
+                      return (
+                        <ReferenceLine key={`wf-${m}`} x={m} stroke="rgba(168,85,247,0.5)" strokeDasharray="3 3">
+                          <Label value={fmtK(total)} position="insideTopRight" fill="#a855f7" fontSize={9} />
+                        </ReferenceLine>
+                      );
+                    })
+                  }
                   {/* Payoff dots at y=0 for each strategy */}
                   {amortizations.map(a => (
                     <ReferenceDot
