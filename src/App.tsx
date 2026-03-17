@@ -1450,7 +1450,20 @@ function ComparisonPage({ page, onUpdate }) {
   const [activeTab, setActiveTab] = useState("charts");
   const [strategies, setStrategies] = useState(page.strategies);
   const [annualReturn, setAnnualReturn] = useState(0.07);
+  const [shareCopied, setShareCopied] = useState(false);
   const balanceChartRef = useRef(null);
+
+  const handleShare = () => {
+    const payload = JSON.stringify({ title: page.title, strategies, annualReturn });
+    const url = `${window.location.origin}${window.location.pathname}?s=${encodeURIComponent(payload)}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    }).catch(() => {
+      // Fallback: prompt user to copy manually
+      window.prompt("Copy this link:", url);
+    });
+  };
 
   useEffect(() => {
     onUpdate({ ...page, strategies });
@@ -1500,6 +1513,22 @@ function ComparisonPage({ page, onUpdate }) {
     if (!active) return null;
     return { ...active.a.armCountdown, balance: active.s.balance };
   }, [amortizations, strategies]);
+
+  // Per-windfall invest-vs-pay-down analysis for each strategy
+  const windfallAnalyses = useMemo(() =>
+    strategies.map((s, i) => {
+      const a = amortizations[i];
+      if (!s.windfalls?.length) return [];
+      return s.windfalls.map((wf, wfIdx) => {
+        const amortWithout = buildAmortization({ ...s, windfalls: s.windfalls.filter((_, j) => j !== wfIdx) });
+        const interestSaved = Math.max(0, amortWithout.totalInterest - a.totalInterest);
+        const yearsInvested = Math.max(0, a.monthsToPayoff - wf.month) / 12;
+        const investFV = wf.amount * Math.pow(1 + annualReturn, yearsInvested);
+        return { wf, interestSaved, investFV, payWins: interestSaved >= investFV };
+      });
+    }),
+    [strategies, amortizations, annualReturn]
+  );
 
   const addStrategy = () => {
     const idx = strategies.length % PALETTE.length;
@@ -1581,6 +1610,22 @@ function ComparisonPage({ page, onUpdate }) {
             }}
           >
             ⓘ Glossary
+          </button>
+          <button
+            onClick={handleShare}
+            style={{
+              background: shareCopied ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${shareCopied ? "rgba(34,197,94,0.4)" : "rgba(255,255,255,0.1)"}`,
+              color: shareCopied ? "#22c55e" : "#666",
+              borderRadius: 7,
+              padding: "6px 12px",
+              fontSize: 12,
+              cursor: "pointer",
+              fontWeight: 600,
+              transition: "all 0.2s",
+            }}
+          >
+            {shareCopied ? "✓ Copied!" : "↗ Share"}
           </button>
           <button
             onClick={() => setEditMode(!editMode)}
@@ -1813,6 +1858,44 @@ function ComparisonPage({ page, onUpdate }) {
                         Invest after payoff
                       </div>
                       <div style={{ fontSize: 11, color: "#444" }}>Longest payoff — set the horizon</div>
+                    </div>
+                  )}
+
+                  {/* Windfall invest vs pay-down analysis */}
+                  {windfallAnalyses[i]?.length > 0 && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 9, color: "#555", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>
+                        Lump-sum: invest vs pay down
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {windfallAnalyses[i].map(({ wf, interestSaved, investFV, payWins }, wfIdx) => (
+                          <div key={wfIdx} style={{
+                            padding: "6px 8px", borderRadius: 6,
+                            background: "rgba(168,85,247,0.05)",
+                            border: "1px solid rgba(168,85,247,0.12)",
+                          }}>
+                            <div style={{ fontSize: 9, color: "#a855f7", fontWeight: 700, marginBottom: 3, fontFamily: "monospace" }}>
+                              Mo {wf.month} · {fmtK(wf.amount)}
+                            </div>
+                            <div style={{ display: "flex", gap: 10, fontSize: 10 }}>
+                              <span>
+                                <span style={{ color: "#555" }}>Pay down: </span>
+                                <span style={{ color: payWins ? "#22c55e" : "#666", fontFamily: "monospace", fontWeight: payWins ? 700 : 400 }}>
+                                  saves {fmtK(interestSaved)}
+                                </span>
+                                {payWins && <span style={{ color: "#22c55e", marginLeft: 3 }}>✓</span>}
+                              </span>
+                              <span>
+                                <span style={{ color: "#555" }}>Invest: </span>
+                                <span style={{ color: !payWins ? "#3b82f6" : "#666", fontFamily: "monospace", fontWeight: !payWins ? 700 : 400 }}>
+                                  {investFV >= 1e6 ? "$" + (investFV / 1e6).toFixed(2) + "M" : fmtK(investFV)}
+                                </span>
+                                {!payWins && <span style={{ color: "#3b82f6", marginLeft: 3 }}>✓</span>}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -2096,6 +2179,22 @@ const defaultPage = () => ({
 
 export default function App() {
   const [pages, setPages] = useState(() => {
+    // Check for shared link first (?s=...)
+    try {
+      const shareParam = new URLSearchParams(window.location.search).get('s');
+      if (shareParam) {
+        const shared = JSON.parse(decodeURIComponent(shareParam));
+        if (shared.strategies && Array.isArray(shared.strategies)) {
+          window.history.replaceState({}, '', window.location.pathname);
+          return [{
+            id: `page-${Date.now()}`,
+            title: shared.title || 'Shared Comparison',
+            strategies: shared.strategies,
+            createdAt: new Date().toISOString(),
+          }];
+        }
+      }
+    } catch {}
     const saved = loadPages();
     return saved || [defaultPage()];
   });
